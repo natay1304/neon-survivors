@@ -18,6 +18,8 @@ export interface UpgradeOption {
 export class UIManager {
   currentUpgrades: UpgradeOption[] = [];
   selectedUpgrade = -1;
+  canRevive = false;
+  private onRevive: (() => void) | null = null;
 
   constructor(
     private ctx: CanvasRenderingContext2D,
@@ -162,6 +164,10 @@ export class UIManager {
     }
   }
 
+  setReviveHandler(handler: () => void): void {
+    this.onRevive = handler;
+  }
+
   drawGameOver(w: number, h: number, player: Player, gameTime: number, victory: boolean): void {
     const ctx = this.ctx;
 
@@ -195,10 +201,31 @@ export class UIManager {
       ctx.fillText(s, w / 2, h / 2 - 30 + i * 28);
     });
 
+    // Revive button (only on game over, not victory, and only once)
+    if (!victory && this.canRevive) {
+      const revW = 240, revH = 44;
+      const revX = w / 2 - revW / 2;
+      const revY = h / 2 + 90;
+      const revHover = this.isHovering(revX, revY, revW, revH);
+
+      ctx.fillStyle = revHover ? '#3a2a1a' : '#2a1a0a';
+      ctx.fillRect(revX, revY, revW, revH);
+      ctx.strokeStyle = '#ffaa33';
+      ctx.lineWidth = revHover ? 2 : 1;
+      ctx.strokeRect(revX, revY, revW, revH);
+
+      const pulse = 0.7 + Math.sin(Date.now() * 0.005) * 0.3;
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = '#ffaa33';
+      ctx.font = 'bold 16px monospace';
+      ctx.fillText('▶ WATCH AD — REVIVE', w / 2, revY + 28);
+      ctx.globalAlpha = 1;
+    }
+
     // Restart button
     const btnW = 200, btnH = 44;
     const btnX = w / 2 - btnW / 2;
-    const btnY = h / 2 + 100;
+    const btnY = !victory && this.canRevive ? h / 2 + 150 : h / 2 + 100;
     const hover = this.isHovering(btnX, btnY, btnW, btnH);
 
     ctx.fillStyle = hover ? '#2a2a5a' : '#1a1a3a';
@@ -345,10 +372,21 @@ export class UIManager {
       }
     }
 
+    // Revive button click
+    if (this.canRevive && this.onRevive) {
+      const revW = 240, revH = 44;
+      const revX = w / 2 - revW / 2;
+      const revY = h / 2 + 90;
+      if (x >= revX && x <= revX + revW && y >= revY && y <= revY + revH) {
+        this.onRevive();
+        return;
+      }
+    }
+
     // Restart button click
     const btnW = 200, btnH = 44;
     const btnX = w / 2 - btnW / 2;
-    const btnY = h / 2 + 100;
+    const btnY = this.canRevive ? h / 2 + 150 : h / 2 + 100;
     if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
       this.onRestart();
     }

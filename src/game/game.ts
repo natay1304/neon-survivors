@@ -48,6 +48,7 @@ export class Game {
   private accumulator = 0;
   private lastTime = 0;
   private playerId = -1;
+  private hasRevived = false;
 
   private gameState = {
     damageMult: 0,
@@ -74,6 +75,7 @@ export class Game {
       (index) => this.onUpgradeSelected(index),
       () => this.restart(),
     );
+    this.ui.setReviveHandler(() => this.revive());
     this.ui.enableTracking();
 
     this.initGame();
@@ -111,6 +113,8 @@ export class Game {
     this.gameState.gameTime = 0;
     this.gameState.bossSpawned.clear();
     this.gameState.minibossSpawned.clear();
+    this.hasRevived = false;
+    this.ui.canRevive = true;
 
     this.renderer = new GameRenderer(this.ctx, this.camera, this.particles, this.floatingText);
 
@@ -168,6 +172,30 @@ export class Game {
       this.screen = 'playing';
       this.ads.gameplayStart();
     });
+  }
+
+  private revive(): void {
+    if (this.hasRevived) return;
+    // Show rewarded ad, then revive player with 50% HP
+    this.ads.showRewarded().then((watched) => {
+      if (watched) {
+        this.hasRevived = true;
+        this.ui.canRevive = false;
+        const hp = this.world.get<Health>(this.playerId, C.Health);
+        hp.current = Math.ceil(hp.max * 0.5);
+        // Brief invulnerability after revive
+        hp.invuln = 2;
+        this.screen = 'playing';
+        this.ads.gameplayStart();
+        // Revive particles
+        this.particles.emit(
+          this.world.get<Pos>(this.playerId, C.Pos).x,
+          this.world.get<Pos>(this.playerId, C.Pos).y,
+          25,
+          { color: '#ffaa33', speed: 150, life: 0.8, size: 5, sizeEnd: 0 },
+        );
+      }
+    }).catch(() => {});
   }
 
   private onUpgradeSelected(index: number): void {
@@ -230,6 +258,7 @@ export class Game {
     const hp = this.world.get<Health>(this.playerId, C.Health);
     if (hp.current <= 0) {
       this.screen = 'gameover';
+      this.ui.canRevive = !this.hasRevived;
       this.camera.shake(8, 0.5);
       this.ads.gameplayStop();
       return;

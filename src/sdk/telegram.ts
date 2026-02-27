@@ -3,7 +3,7 @@
 import type { AdPlatform } from './ads';
 
 // Adsgram block ID — replace with your own from https://adsgram.ai
-const ADSGRAM_BLOCK_ID = 'YOUR_BLOCK_ID';
+const ADSGRAM_BLOCK_ID = '23869';
 
 export class TelegramPlatform implements AdPlatform {
   readonly name = 'telegram';
@@ -18,7 +18,7 @@ export class TelegramPlatform implements AdPlatform {
     console.log('[SDK] Telegram Mini App detected');
 
     // Init Adsgram ads if script loaded
-    if (window.Adsgram && ADSGRAM_BLOCK_ID !== 'YOUR_BLOCK_ID') {
+    if (window.Adsgram) {
       try {
         this.adController = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
         console.log('[SDK] Adsgram initialized');
