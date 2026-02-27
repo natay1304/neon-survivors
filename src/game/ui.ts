@@ -29,7 +29,7 @@ export class UIManager {
     this.ctx.canvas.addEventListener('touchend', this.onTouch);
   }
 
-  drawMenu(w: number, h: number): void {
+  drawMenu(w: number, h: number, isMobile = false): void {
     const ctx = this.ctx;
     const s = Math.min(1, w / 700);
 
@@ -66,8 +66,13 @@ export class UIManager {
     // Controls
     ctx.fillStyle = '#555566';
     ctx.font = `${Math.max(11, Math.round(13 * s))}px monospace`;
-    ctx.fillText('WASD / Arrows = move', w / 2, cy + 100);
-    ctx.fillText('MOUSE = aim  |  ESC = pause', w / 2, cy + 118);
+    if (isMobile) {
+      ctx.fillText('Left joystick = move', w / 2, cy + 100);
+      ctx.fillText('Right joystick = aim & shoot', w / 2, cy + 118);
+    } else {
+      ctx.fillText('WASD / Arrows = move', w / 2, cy + 100);
+      ctx.fillText('Mouse = aim & shoot  |  ESC = pause', w / 2, cy + 118);
+    }
   }
 
   drawLevelUp(w: number, h: number): void {

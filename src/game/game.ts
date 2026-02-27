@@ -313,7 +313,7 @@ export class Game {
     switch (this.screen) {
       case 'menu':
         this.renderer.render(this.world, this.gameTime, this.screen);
-        this.ui.drawMenu(w, h);
+        this.ui.drawMenu(w, h, this.input.isMobile);
         break;
       case 'playing':
         this.renderer.render(this.world, this.gameTime, this.screen);
