@@ -4,6 +4,7 @@ import type { AdPlatform } from './ads';
 
 export class YandexPlatform implements AdPlatform {
   readonly name = 'yandex';
+  readonly hasAds = true;
   private ysdk: YandexSDK | null = null;
 
   async init(): Promise<void> {

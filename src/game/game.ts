@@ -114,7 +114,7 @@ export class Game {
     this.gameState.bossSpawned.clear();
     this.gameState.minibossSpawned.clear();
     this.hasRevived = false;
-    this.ui.canRevive = true;
+    this.ui.canRevive = this.ads.hasAds;
 
     this.renderer = new GameRenderer(this.ctx, this.camera, this.particles, this.floatingText);
 

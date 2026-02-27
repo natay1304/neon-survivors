@@ -7,6 +7,7 @@ const ADSGRAM_BLOCK_ID = '23869';
 
 export class TelegramPlatform implements AdPlatform {
   readonly name = 'telegram';
+  readonly hasAds = true;
   private adController: AdsgramController | null = null;
 
   async init(): Promise<void> {

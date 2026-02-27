@@ -4,6 +4,7 @@ import type { AdPlatform } from './ads';
 
 export class CrazyGamesPlatform implements AdPlatform {
   readonly name = 'crazygames';
+  readonly hasAds = true;
   private sdk: CrazyGamesSDK | null = null;
 
   async init(): Promise<void> {
