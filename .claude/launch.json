@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "neon-survivors",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--host", "0.0.0.0", "--port", "5173"],
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=games/neon-survivors"],
       "port": 5173
     }
   ]

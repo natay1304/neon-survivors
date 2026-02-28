@@ -502,7 +502,9 @@ export function createWaveSystem(
     // Regular spawns
     if (enemyCount >= MAX_ENEMIES) return;
 
-    const spawnRate = 0.5 + time / 60 * 0.7; // enemies per second, scales with time
+    const t = time / GAME_DURATION; // 0..1
+    // Base ramp + surge in final 30%: ~0.5 early → ~8 at end
+    const spawnRate = 0.5 + time / 60 * 0.7 + Math.max(0, t - 0.7) * 15;
     spawnAccumulator += spawnRate * dt;
 
     while (spawnAccumulator >= 1) {
@@ -536,18 +538,21 @@ function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime: number
   const x = playerPos.x + Math.cos(angle) * dist;
   const y = playerPos.y + Math.sin(angle) * dist;
 
-  // Scale stats with time
-  const timeMult = 1 + gameTime / GAME_DURATION * 1.5;
+  // Scale stats with time — accelerates sharply in final minutes
+  const t = gameTime / GAME_DURATION; // 0..1
+  const hpMult = 1 + t * 1.5 + Math.max(0, t - 0.6) * 2.0;   // ramps hard after 60%
+  const dmgMult = 1 + t * 1.5 + Math.max(0, t - 0.5) * 1.5;   // ramps after 50%
+  const spdMult = 1 + t * 0.4 + Math.max(0, t - 0.5) * 0.6;   // +70% at end vs +30% before
 
   const e = world.spawn();
   world.add(e, C.Pos, { x, y });
   world.add(e, C.Vel, { x: 0, y: 0 });
-  world.add(e, C.Health, { current: def.hp * timeMult, max: def.hp * timeMult, invuln: 0 });
+  world.add(e, C.Health, { current: def.hp * hpMult, max: def.hp * hpMult, invuln: 0 });
   world.add(e, C.Collider, { radius: def.size });
   world.add(e, C.Enemy, {
     type: type,
-    speed: def.speed * (1 + gameTime / GAME_DURATION * 0.3),
-    damage: def.damage * timeMult,
+    speed: def.speed * spdMult,
+    damage: def.damage * dmgMult,
     xpValue: def.xp,
     contactTimer: 0,
   } as Enemy);

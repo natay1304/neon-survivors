@@ -19,7 +19,10 @@ export class UIManager {
   currentUpgrades: UpgradeOption[] = [];
   selectedUpgrade = -1;
   canRevive = false;
+  screen: GameScreen = 'menu';
   private onRevive: (() => void) | null = null;
+  private onShare: ((text: string) => void) | null = null;
+  private shareData: { kills: number; time: string; level: number; victory: boolean } | null = null;
 
   constructor(
     private ctx: CanvasRenderingContext2D,
@@ -168,6 +171,10 @@ export class UIManager {
     this.onRevive = handler;
   }
 
+  setShareHandler(handler: (text: string) => void): void {
+    this.onShare = handler;
+  }
+
   drawGameOver(w: number, h: number, player: Player, gameTime: number, victory: boolean): void {
     const ctx = this.ctx;
 
@@ -237,6 +244,25 @@ export class UIManager {
     ctx.fillStyle = '#00ffff';
     ctx.font = 'bold 18px monospace';
     ctx.fillText('PLAY AGAIN', w / 2, btnY + 28);
+
+    // Share button
+    const shareW = 200, shareH = 38;
+    const shareX = w / 2 - shareW / 2;
+    const shareY = btnY + btnH + 14;
+    const shareHover = this.isHovering(shareX, shareY, shareW, shareH);
+
+    ctx.fillStyle = shareHover ? '#1a3a1a' : '#0a2a0a';
+    ctx.fillRect(shareX, shareY, shareW, shareH);
+    ctx.strokeStyle = '#44ff44';
+    ctx.lineWidth = shareHover ? 2 : 1;
+    ctx.strokeRect(shareX, shareY, shareW, shareH);
+
+    ctx.fillStyle = '#44ff44';
+    ctx.font = 'bold 15px monospace';
+    ctx.fillText('📤 SHARE SCORE', w / 2, shareY + 24);
+
+    // Save share data
+    this.shareData = { kills: player.kills, time: `${min}:${sec.toString().padStart(2, '0')}`, level: player.level, victory };
   }
 
   drawPaused(w: number, h: number): void {
@@ -265,6 +291,22 @@ export class UIManager {
       ctx.fillStyle = '#555566';
       ctx.fillText('MOUSE = aim  |  WASD = move', w / 2, h / 2 + 65);
     }
+
+    // Restart button
+    const btnW = 180, btnH = 38;
+    const btnX = w / 2 - btnW / 2;
+    const btnY = h / 2 + (mobile ? 70 : 95);
+    const hover = this.isHovering(btnX, btnY, btnW, btnH);
+
+    ctx.fillStyle = hover ? '#2a1a1a' : '#1a1010';
+    ctx.fillRect(btnX, btnY, btnW, btnH);
+    ctx.strokeStyle = '#ff4444';
+    ctx.lineWidth = hover ? 2 : 1;
+    ctx.strokeRect(btnX, btnY, btnW, btnH);
+
+    ctx.fillStyle = '#ff4444';
+    ctx.font = `bold ${mobile ? 14 : 15}px monospace`;
+    ctx.fillText('RESTART', w / 2, btnY + 25);
   }
 
   generateUpgrades(player: Player): UpgradeOption[] {
@@ -372,6 +414,18 @@ export class UIManager {
       }
     }
 
+    // Pause restart button click
+    if (this.screen === 'paused') {
+      const mobile = w < 600;
+      const btnW = 180, btnH = 38;
+      const btnX = w / 2 - btnW / 2;
+      const btnY = h / 2 + (mobile ? 70 : 95);
+      if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
+        this.onRestart();
+        return;
+      }
+    }
+
     // Revive button click
     if (this.canRevive && this.onRevive) {
       const revW = 240, revH = 44;
@@ -389,6 +443,23 @@ export class UIManager {
     const btnY = this.canRevive ? h / 2 + 150 : h / 2 + 100;
     if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
       this.onRestart();
+      return;
+    }
+
+    // Share button click
+    if (this.shareData && this.onShare) {
+      const shareW = 200, shareH = 38;
+      const shareX = w / 2 - shareW / 2;
+      const shareY = btnY + btnH + 14;
+      if (x >= shareX && x <= shareX + shareW && y >= shareY && y <= shareY + shareH) {
+        const d = this.shareData;
+        const emoji = d.victory ? '🏆' : '💀';
+        const text = d.victory
+          ? `${emoji} I beat Neon Survivors! Level ${d.level}, ${d.kills} kills in ${d.time}! Can you survive? 🚀`
+          : `${emoji} I survived ${d.time} in Neon Survivors! Level ${d.level}, ${d.kills} kills. Can you beat me? 🚀`;
+        this.onShare(text);
+        return;
+      }
     }
   }
 

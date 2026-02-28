@@ -75,6 +75,7 @@ export class NeonSurvivorsScene implements Scene {
       () => this.restart(),
     );
     this.ui.setReviveHandler(() => this.revive());
+    this.ui.setShareHandler((text) => this.shareScore(text));
     this.ui.enableTracking();
   }
 
@@ -151,6 +152,7 @@ export class NeonSurvivorsScene implements Scene {
     const w = window.innerWidth;
     const h = window.innerHeight;
 
+    this.ui.screen = this.screen;
     switch (this.screen) {
       case 'menu':
         this.renderer.render(this.world, this.gameTime, this.screen);
@@ -290,6 +292,35 @@ export class NeonSurvivorsScene implements Scene {
     }).catch(() => {});
   }
 
+  private shareScore(text: string): void {
+    const url = 'https://t.me/neon_survivors_bot/game';
+    const fullText = `${text}\n${url}`;
+
+    // Telegram Mini App: use native share
+    if (window.Telegram?.WebApp) {
+      try {
+        // switchInlineQuery shares text to a chat
+        (window.Telegram.WebApp as any).switchInlineQuery?.(text, ['users', 'groups', 'channels']);
+        return;
+      } catch { /* fallback below */ }
+    }
+
+    // Web Share API
+    if (navigator.share) {
+      navigator.share({ text: fullText }).catch(() => {});
+      return;
+    }
+
+    // Fallback: copy to clipboard
+    navigator.clipboard?.writeText(fullText).then(() => {
+      this.floatingText.add(
+        this.world.get<Pos>(this.playerId, C.Pos).x,
+        this.world.get<Pos>(this.playerId, C.Pos).y,
+        'Copied!', '#44ff44',
+      );
+    }).catch(() => {});
+  }
+
   private onUpgradeSelected(index: number): void {
     if (this.screen !== 'levelup') return;
     const upgrade = this.ui.currentUpgrades[index];
@@ -345,7 +376,7 @@ export class NeonSurvivorsScene implements Scene {
     const hp = this.world.get<Health>(this.playerId, C.Health);
     if (hp.current <= 0) {
       this.screen = 'gameover';
-      this.ui.canRevive = !this.hasRevived;
+      this.ui.canRevive = this.ads.hasAds && !this.hasRevived;
       this.camera.shake(8, 0.5);
       this.ads.gameplayStop();
       return;
