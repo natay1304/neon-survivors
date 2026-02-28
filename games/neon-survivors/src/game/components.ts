@@ -1,5 +1,7 @@
 /** All component types used in the game */
 
+import type { Blackboard } from '@survivors/core';
+
 // Component type constants
 export const C = {
   Pos: 'pos',
@@ -15,6 +17,7 @@ export const C = {
   Aura: 'aura',
   Lightning: 'lightning',
   Bonus: 'bonus',
+  BehaviorTree: 'bt',
 } as const;
 
 // Component data interfaces
@@ -104,4 +107,8 @@ export interface LightningData {
 export interface Bonus {
   type: 'heal' | 'magnet' | 'bomb' | 'speed';
   lifetime: number;
+}
+
+export interface BehaviorTreeData {
+  blackboard: Blackboard;
 }

@@ -1,4 +1,4 @@
-/** Reusable utilities: ObjectPool, EventBus */
+/** Reusable utilities: ObjectPool, FloatingTextManager */
 
 export class ObjectPool<T> {
   private items: T[] = [];
@@ -16,31 +16,6 @@ export class ObjectPool<T> {
   }
 
   get size(): number { return this.items.length; }
-}
-
-type Listener = (...args: unknown[]) => void;
-
-export class EventBus {
-  private listeners = new Map<string, Listener[]>();
-
-  on(event: string, fn: Listener): void {
-    let list = this.listeners.get(event);
-    if (!list) { list = []; this.listeners.set(event, list); }
-    list.push(fn);
-  }
-
-  off(event: string, fn: Listener): void {
-    const list = this.listeners.get(event);
-    if (list) {
-      const idx = list.indexOf(fn);
-      if (idx >= 0) list.splice(idx, 1);
-    }
-  }
-
-  emit(event: string, ...args: unknown[]): void {
-    const list = this.listeners.get(event);
-    if (list) for (const fn of list) fn(...args);
-  }
 }
 
 /** Floating damage/text numbers */
@@ -70,17 +45,5 @@ export class FloatingTextManager {
         this.items.pop();
       }
     }
-  }
-
-  draw(ctx: CanvasRenderingContext2D): void {
-    for (const ft of this.items) {
-      const t = ft.life / ft.maxLife;
-      ctx.globalAlpha = t;
-      ctx.fillStyle = ft.color;
-      ctx.font = `bold ${ft.size}px monospace`;
-      ctx.textAlign = 'center';
-      ctx.fillText(ft.text, ft.x, ft.y);
-    }
-    ctx.globalAlpha = 1;
   }
 }

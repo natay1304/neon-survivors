@@ -1,36 +1,63 @@
 /** Game renderer — draws background, entities, effects, HUD */
 
-import { World, Entity } from '../core/ecs';
-import { Camera } from '../core/camera';
-import { ParticleSystem } from '../core/particles';
-import { FloatingTextManager } from '../core/utils';
+import { World, Entity, Camera2D, ParticleSystem, FloatingTextManager, TWO_PI, clamp } from '@survivors/core';
 import { C, Pos, Health, Visual, Player, LightningData, Bonus } from './components';
 import { WEAPONS, GAME_DURATION, STAT_UPGRADES } from './config';
-import { TWO_PI, clamp } from '../core/math';
+import { drawParticles, drawFloatingText, applyCameraToContext } from './canvas-helpers';
 
 const GRID_SIZE = 64;
 const BG_COLOR = '#0a0a1a';
 
 export class GameRenderer {
-  private stars: { x: number; y: number; s: number; a: number; layer: number }[] = [];
+  private starLayers: { x: number; y: number; s: number; a: number }[][] = [[], [], []];
+  private planets: { x: number; y: number; radius: number; color: string; ringColor: string | null; highlight: string }[] = [];
+  private now = 0;
+  private entityBuf: { e: Entity; pos: Pos; vis: Visual; y: number }[] = [];
 
   constructor(
     private ctx: CanvasRenderingContext2D,
-    private camera: Camera,
+    private camera: Camera2D,
     private particles: ParticleSystem,
     private floatingText: FloatingTextManager,
   ) {
     // Generate parallax dot layers
     for (let i = 0; i < 70; i++) {
-      this.stars.push({
+      this.starLayers[0].push({
         x: Math.random() * 800, y: Math.random() * 800,
-        s: 2 + Math.random() * 2.5, a: 0.6 + Math.random() * 0.4, layer: 0,
+        s: 1.5 + Math.random() * 1.5, a: 0.4 + Math.random() * 0.3,
       });
     }
-    for (let i = 0; i < 45; i++) {
-      this.stars.push({
+    for (let i = 0; i < 50; i++) {
+      this.starLayers[1].push({
         x: Math.random() * 800, y: Math.random() * 800,
-        s: 2.5 + Math.random() * 3, a: 0.4 + Math.random() * 0.4, layer: 1,
+        s: 2 + Math.random() * 2.5, a: 0.5 + Math.random() * 0.4,
+      });
+    }
+    for (let i = 0; i < 30; i++) {
+      this.starLayers[2].push({
+        x: Math.random() * 800, y: Math.random() * 800,
+        s: 3 + Math.random() * 3, a: 0.6 + Math.random() * 0.4,
+      });
+    }
+
+    // Generate background planets (large tile, very slow parallax)
+    const planetColors = [
+      { color: '#334466', highlight: '#5577aa', ring: '#667799' },
+      { color: '#553344', highlight: '#885566', ring: null },
+      { color: '#335544', highlight: '#558866', ring: '#447755' },
+      { color: '#444466', highlight: '#7777aa', ring: null },
+      { color: '#553322', highlight: '#886644', ring: '#775533' },
+      { color: '#223355', highlight: '#4466aa', ring: null },
+    ];
+    for (let i = 0; i < 6; i++) {
+      const pc = planetColors[i % planetColors.length];
+      this.planets.push({
+        x: 100 + Math.random() * 1800,
+        y: 100 + Math.random() * 1800,
+        radius: 25 + Math.random() * 55,
+        color: pc.color,
+        highlight: pc.highlight,
+        ringColor: pc.ring,
       });
     }
   }
@@ -39,6 +66,7 @@ export class GameRenderer {
     const ctx = this.ctx;
     const w = this.camera.width;
     const h = this.camera.height;
+    this.now = Date.now();
 
     // Clear
     ctx.fillStyle = BG_COLOR;
@@ -48,14 +76,14 @@ export class GameRenderer {
     this.drawParallax(w, h);
 
     ctx.save();
-    this.camera.apply(ctx);
+    applyCameraToContext(ctx, this.camera.pos, this.camera.shakeOffset, w, h);
 
     this.drawBackground(w, h);
     this.drawAuras(world);
     this.drawEntities(world);
     this.drawLightning(world);
-    this.particles.draw(ctx);
-    this.floatingText.draw(ctx);
+    drawParticles(ctx, this.particles);
+    drawFloatingText(ctx, this.floatingText);
 
     ctx.restore();
 
@@ -85,16 +113,34 @@ export class GameRenderer {
   private drawParallax(w: number, h: number): void {
     const ctx = this.ctx;
     const T = 800;
-    const speeds = [0.05, 0.15];
-    const colors = ['#99bbdd', '#bbddff'];
+    const speeds = [0.15, 0.35, 0.55];
+    const colors = ['#667799', '#99bbdd', '#bbddff'];
 
-    for (let layer = 0; layer < 2; layer++) {
+    // Draw planets (very slow parallax, large tile)
+    const PT = 2000;
+    const planetSpeed = 0.04;
+    const pox = (this.camera.pos.x * planetSpeed) % PT;
+    const poy = (this.camera.pos.y * planetSpeed) % PT;
+    for (const planet of this.planets) {
+      const bx = ((planet.x - pox) % PT + PT) % PT;
+      const by = ((planet.y - poy) % PT + PT) % PT;
+      // Only draw if on screen (with margin)
+      for (let tx = bx - PT; tx < w + planet.radius; tx += PT) {
+        if (tx + planet.radius < -planet.radius) continue;
+        for (let ty = by - PT; ty < h + planet.radius; ty += PT) {
+          if (ty + planet.radius < -planet.radius) continue;
+          this.drawPlanet(ctx, tx, ty, planet);
+        }
+      }
+    }
+
+    // Stars (pre-organized by layer — no per-star layer check)
+    for (let layer = 0; layer < 3; layer++) {
       const ox = (this.camera.pos.x * speeds[layer]) % T;
       const oy = (this.camera.pos.y * speeds[layer]) % T;
       ctx.fillStyle = colors[layer];
 
-      for (const star of this.stars) {
-        if (star.layer !== layer) continue;
+      for (const star of this.starLayers[layer]) {
         ctx.globalAlpha = star.a;
         const baseX = ((star.x - ox) % T + T) % T;
         const baseY = ((star.y - oy) % T + T) % T;
@@ -110,6 +156,36 @@ export class GameRenderer {
     ctx.globalAlpha = 1;
   }
 
+  private drawPlanet(
+    ctx: CanvasRenderingContext2D, x: number, y: number,
+    p: { radius: number; color: string; highlight: string; ringColor: string | null },
+  ): void {
+    const r = p.radius;
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+
+    // Body with radial gradient (lit from top-left)
+    const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+    grad.addColorStop(0, p.highlight);
+    grad.addColorStop(1, p.color);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TWO_PI);
+    ctx.fill();
+
+    // Ring (for planets that have one)
+    if (p.ringColor) {
+      ctx.globalAlpha = 0.12;
+      ctx.strokeStyle = p.ringColor;
+      ctx.lineWidth = 2 + r * 0.04;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r * 1.5, r * 0.3, -0.3, 0, TWO_PI);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
   private drawAuras(world: World): void {
     const ctx = this.ctx;
     const players = world.query(C.Player, C.Pos);
@@ -121,7 +197,7 @@ export class GameRenderer {
     for (const slot of player.weapons) {
       if (slot.type === 'holy_aura') {
         const lvl = WEAPONS.holy_aura.levels[Math.min(slot.level, WEAPONS.holy_aura.levels.length - 1)];
-        const pulse = 1 + Math.sin(Date.now() * 0.005) * 0.05;
+        const pulse = 1 + Math.sin(this.now * 0.005) * 0.05;
         ctx.save();
         ctx.globalAlpha = 0.08;
         ctx.fillStyle = WEAPONS.holy_aura.color;
@@ -141,17 +217,27 @@ export class GameRenderer {
     const ctx = this.ctx;
     const cam = this.camera;
 
-    // Collect and sort by Y for pseudo-depth
-    const entities: { e: Entity; pos: Pos; vis: Visual }[] = [];
+    // Collect into persistent buffer and sort by Y for pseudo-depth
+    let count = 0;
     for (const e of world.query(C.Pos, C.Visual)) {
+      // Skip XP gems and bonuses — drawn separately with animations below
+      if (world.has(e, C.XPGem) || world.has(e, C.Bonus)) continue;
       const pos = world.get<Pos>(e, C.Pos);
       if (!cam.isVisible(pos.x, pos.y, 50)) continue;
       const vis = world.get<Visual>(e, C.Visual);
-      entities.push({ e, pos, vis });
+      if (count >= this.entityBuf.length) {
+        this.entityBuf.push({ e, pos, vis, y: pos.y });
+      } else {
+        const entry = this.entityBuf[count];
+        entry.e = e; entry.pos = pos; entry.vis = vis; entry.y = pos.y;
+      }
+      count++;
     }
-    entities.sort((a, b) => a.pos.y - b.pos.y);
+    this.entityBuf.length = count;
+    this.entityBuf.sort((a, b) => a.y - b.y);
 
-    for (const { e, pos, vis } of entities) {
+    for (let i = 0; i < count; i++) {
+      const { e, pos, vis } = this.entityBuf[i];
       ctx.save();
       ctx.translate(pos.x, pos.y);
 
@@ -159,7 +245,7 @@ export class GameRenderer {
       if (vis.shape === 'flame') {
         const s = vis.size;
         const seed = pos.x * 73.17 + pos.y * 37.91;
-        const t = Date.now() * 0.006;
+        const t = this.now * 0.006;
         const flicker = 0.85 + Math.sin(t + seed) * 0.15;
 
         // Outer red glow (large, transparent)
@@ -187,10 +273,14 @@ export class GameRenderer {
         continue;
       }
 
-      // Glow effect
-      if (vis.glow) {
-        ctx.shadowColor = vis.glow;
-        ctx.shadowBlur = vis.glowSize ?? 10;
+      // Fake glow — cheap radial circle instead of expensive shadowBlur
+      if (vis.glow && !world.has(e, C.Enemy)) {
+        ctx.globalAlpha = 0.15;
+        ctx.fillStyle = vis.glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, vis.size + (vis.glowSize ?? 10), 0, TWO_PI);
+        ctx.fill();
+        ctx.globalAlpha = 1;
       }
 
       // Damage flash
@@ -203,15 +293,13 @@ export class GameRenderer {
 
       // Player invuln blink
       if (world.has(e, C.Player) && hp && hp.invuln > 0) {
-        ctx.globalAlpha = 0.5 + Math.sin(Date.now() * 0.02) * 0.5;
+        ctx.globalAlpha = 0.5 + Math.sin(this.now * 0.02) * 0.5;
       }
 
       const r = vis.rotation ?? 0;
       if (r) ctx.rotate(r);
 
       this.drawShape(ctx, vis.shape, vis.size);
-
-      ctx.shadowBlur = 0;
 
       // Health bar for enemies
       if (world.has(e, C.Enemy) && hp && hp.current < hp.max) {
@@ -234,13 +322,17 @@ export class GameRenderer {
       const pos = world.get<Pos>(e, C.Pos);
       if (!cam.isVisible(pos.x, pos.y)) continue;
       const vis = world.get<Visual>(e, C.Visual);
-      const bob = Math.sin(Date.now() * 0.006 + pos.x * 0.1) * 2;
+      const bob = Math.sin(this.now * 0.006 + pos.x * 0.1) * 2;
 
       ctx.save();
       ctx.translate(pos.x, pos.y + bob);
       if (vis.glow) {
-        ctx.shadowColor = vis.glow;
-        ctx.shadowBlur = vis.glowSize ?? 6;
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = vis.glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, vis.size + (vis.glowSize ?? 6), 0, TWO_PI);
+        ctx.fill();
+        ctx.globalAlpha = 1;
       }
       ctx.fillStyle = vis.color;
       this.drawShape(ctx, 'diamond', vis.size);
@@ -253,8 +345,8 @@ export class GameRenderer {
       if (!cam.isVisible(pos.x, pos.y, 40)) continue;
       const vis = world.get<Visual>(e, C.Visual);
       const bonus = world.get<Bonus>(e, C.Bonus);
-      const bob = Math.sin(Date.now() * 0.005 + pos.y * 0.1) * 3;
-      const pulse = 0.7 + Math.sin(Date.now() * 0.004) * 0.3;
+      const bob = Math.sin(this.now * 0.005 + pos.y * 0.1) * 3;
+      const pulse = 0.7 + Math.sin(this.now * 0.004) * 0.3;
 
       ctx.save();
       ctx.translate(pos.x, pos.y + bob);
@@ -277,13 +369,18 @@ export class GameRenderer {
       // Shape
       ctx.globalAlpha = 1;
       if (vis.rotation) ctx.rotate(vis.rotation);
-      ctx.shadowColor = vis.glow ?? vis.color;
-      ctx.shadowBlur = 18;
+      // Fake glow for bonus
+      const glowColor = vis.glow ?? vis.color;
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = glowColor;
+      ctx.beginPath();
+      ctx.arc(0, 0, vis.size + 14, 0, TWO_PI);
+      ctx.fill();
+      ctx.globalAlpha = 1;
       ctx.fillStyle = vis.color;
       this.drawShape(ctx, vis.shape, vis.size);
 
       // Bonus type icon (text label)
-      ctx.shadowBlur = 0;
       ctx.rotate(-(vis.rotation ?? 0)); // undo spin for label
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 9px monospace';
@@ -302,13 +399,11 @@ export class GameRenderer {
       const l = world.get<LightningData>(e, C.Lightning);
 
       ctx.save();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 3;
-      ctx.shadowColor = '#4488ff';
-      ctx.shadowBlur = 15;
       ctx.globalAlpha = clamp(l.timer / 0.1, 0, 1);
 
-      // Jagged lightning line
+      // Thick blue under-stroke for glow effect (cheaper than shadowBlur)
+      ctx.strokeStyle = '#4488ff';
+      ctx.lineWidth = 7;
       ctx.beginPath();
       ctx.moveTo(pos.x, pos.y);
       const dx = l.targetX - pos.x;
@@ -320,6 +415,12 @@ export class GameRenderer {
         ctx.lineTo(pos.x + dx * t + jitter, pos.y + dy * t + jitter);
       }
       ctx.stroke();
+
+      // Thin white core line
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
       ctx.restore();
     }
   }

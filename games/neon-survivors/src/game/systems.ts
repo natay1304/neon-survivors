@@ -1,13 +1,11 @@
 /** All game systems — pure functions operating on the ECS world */
 
-import { Vec2, randomAngle, randomRange, clamp } from '../core/math';
-import { World, Entity } from '../core/ecs';
-import { InputManager } from '../core/input';
-import { SpatialHash } from '../core/spatial-hash';
-import { ParticleSystem } from '../core/particles';
-import { FloatingTextManager } from '../core/utils';
-import { C, Pos, Vel, Health, Collider, Player, Enemy, Projectile, XPGem, Visual, LightningData, Bonus } from './components';
+import { Vec2, randomAngle, randomRange, clamp, World, Entity, InputManager, SpatialHash, ParticleSystem, FloatingTextManager, Blackboard, type BTContext } from '@survivors/core';
+import { C, Pos, Vel, Health, Collider, Player, Enemy, Projectile, XPGem, Visual, LightningData, Bonus, type BehaviorTreeData } from './components';
 import { WEAPONS, ENEMIES, ENEMY_SPAWN_DISTANCE, MAX_ENEMIES, GAME_DURATION, BOSS_TIMES, MINIBOSS_TIMES } from './config';
+import { ENEMY_TREES, simpleLODTree } from './enemy-behaviors';
+
+const FIRE_COLORS = ['#ff6600', '#ff8822', '#ffaa00', '#ff4400', '#ffcc33'];
 
 // ─── INPUT SYSTEM ────────────────────────────────────────────────────
 export function createInputSystem(input: InputManager) {
@@ -16,6 +14,8 @@ export function createInputSystem(input: InputManager) {
       const player = world.get<Player>(e, C.Player);
       const vel = world.get<Vel>(e, C.Vel);
       input.update();
+      // Guard: repair corrupted player speed (can happen from buff multiply/divide)
+      if (!isFinite(player.speed) || player.speed <= 0) player.speed = 200;
       vel.x = input.dir.x * player.speed;
       vel.y = input.dir.y * player.speed;
       if (input.dir.x !== 0 || input.dir.y !== 0) {
@@ -32,28 +32,119 @@ export function createMovementSystem() {
     for (const e of world.query(C.Pos, C.Vel)) {
       const pos = world.get<Pos>(e, C.Pos);
       const vel = world.get<Vel>(e, C.Vel);
+      // Guard: zero out non-finite velocities to prevent position corruption
+      if (!isFinite(vel.x)) vel.x = 0;
+      if (!isFinite(vel.y)) vel.y = 0;
       pos.x += vel.x * dt;
       pos.y += vel.y * dt;
+      // Guard: destroy entities that escaped to non-finite positions
+      if (!isFinite(pos.x) || !isFinite(pos.y)) {
+        pos.x = 0; pos.y = 0;
+        vel.x = 0; vel.y = 0;
+        if (!world.has(e, C.Player)) world.destroy(e);
+      }
     }
   };
 }
 
-// ─── ENEMY AI SYSTEM ─────────────────────────────────────────────────
-export function createEnemyAISystem() {
-  const tmpVec = new Vec2();
-  return (world: World, _dt: number) => {
+// ─── ENEMY AI SYSTEM (Behavior Tree) ────────────────────────────────
+// LOD distance thresholds (squared for fast comparison)
+const LOD_CLOSE_SQ = 400 * 400;    // full BT
+const LOD_MED_SQ   = 800 * 800;    // seek only, every frame
+const LOD_FAR_SQ   = 1500 * 1500;  // seek only, every 4 frames
+
+export function createBTEnemySystem(spatialHash: SpatialHash<Entity>) {
+  const sepVec = new Vec2();
+  const nearbyBuf: Entity[] = [];  // reusable query buffer
+  let frame = 0;
+  let totalTime = 0;
+
+  return (world: World, dt: number) => {
+    frame++;
+    totalTime += dt;
     const players = world.query(C.Player, C.Pos);
     if (players.length === 0) return;
     const pPos = world.get<Pos>(players[0], C.Pos);
 
-    for (const e of world.query(C.Enemy, C.Pos, C.Vel)) {
+    for (const e of world.query(C.Enemy, C.Pos, C.Vel, C.BehaviorTree)) {
       const pos = world.get<Pos>(e, C.Pos);
       const enemy = world.get<Enemy>(e, C.Enemy);
       const vel = world.get<Vel>(e, C.Vel);
+      const btData = world.get<BehaviorTreeData>(e, C.BehaviorTree);
 
-      tmpVec.set(pPos.x - pos.x, pPos.y - pos.y).normalize();
-      vel.x = tmpVec.x * enemy.speed;
-      vel.y = tmpVec.y * enemy.speed;
+      // Guard: repair corrupted enemy speed
+      if (!isFinite(enemy.speed) || enemy.speed <= 0) enemy.speed = 50;
+
+      const dx = pPos.x - pos.x;
+      const dy = pPos.y - pos.y;
+      const distSq = dx * dx + dy * dy;
+
+      // LOD frame-skipping: distant enemies update less often
+      if (distSq > LOD_FAR_SQ && (e + frame) % 4 !== 0) continue;
+      if (distSq > LOD_MED_SQ && (e + frame) % 2 !== 0) continue;
+
+      // LOD tree selection: distant enemies use simple seek
+      const fullTree = ENEMY_TREES[enemy.type];
+      if (!fullTree) continue;
+      const tree = distSq > LOD_CLOSE_SQ ? simpleLODTree : fullTree;
+
+      // Set shared blackboard values for this tick
+      const bb = btData.blackboard;
+      bb.set('__playerX', pPos.x);
+      bb.set('__playerY', pPos.y);
+      bb.set('__time', totalTime);
+
+      // Tick the behavior tree
+      const ctx: BTContext = { entity: e, world, dt, blackboard: bb };
+      tree(ctx);
+
+      // Read velocity intent from blackboard
+      const bvx = bb.get<number>('__vx', 0);
+      const bvy = bb.get<number>('__vy', 0);
+
+      // Separation from nearby enemies (uses previous frame spatial hash)
+      sepVec.set(0, 0);
+      spatialHash.queryInto(pos.x, pos.y, 28, nearbyBuf);
+      let sepCount = 0;
+      for (let i = 0; i < nearbyBuf.length; i++) {
+        const other = nearbyBuf[i];
+        if (other === e || !world.has(other, C.Enemy)) continue;
+        const oPos = world.get<Pos>(other, C.Pos);
+        const sdx = pos.x - oPos.x;
+        const sdy = pos.y - oPos.y;
+        const sd = sdx * sdx + sdy * sdy;
+        if (sd > 0 && sd < 784) { // 28^2
+          const sDist = Math.sqrt(sd);
+          sepVec.x += sdx / sDist;
+          sepVec.y += sdy / sDist;
+          sepCount++;
+        }
+      }
+
+      // Normalize BT velocity to get direction, then blend with separation
+      const bLen = Math.sqrt(bvx * bvx + bvy * bvy);
+      if (bLen > 0) {
+        const ndx = bvx / bLen;
+        const ndy = bvy / bLen;
+        // Use the speed from the BT (it already factors in entity speed + multipliers)
+        const speed = bLen;
+
+        if (sepCount > 0) {
+          const sLen = Math.sqrt(sepVec.x * sepVec.x + sepVec.y * sepVec.y) || 1;
+          vel.x = (ndx * 0.75 + sepVec.x / sLen * 0.25) * speed;
+          vel.y = (ndy * 0.75 + sepVec.y / sLen * 0.25) * speed;
+        } else {
+          vel.x = bvx;
+          vel.y = bvy;
+        }
+      } else {
+        vel.x = 0;
+        vel.y = 0;
+      }
+
+      // Guard: zero out non-finite velocities
+      if (!isFinite(vel.x)) vel.x = 0;
+      if (!isFinite(vel.y)) vel.y = 0;
     }
   };
 }
@@ -66,7 +157,24 @@ export function createWeaponSystem(
   spatialHash: SpatialHash<Entity>,
   gameState: { damageMult: number; cooldownMult: number; gameTime: number }
 ) {
+  const seen = new Set<Entity>();
+  const slowEffects: { entity: Entity; speed: number; timer: number }[] = [];
+
   return (world: World, dt: number) => {
+    // Tick slow effects (frost nova)
+    for (let i = slowEffects.length - 1; i >= 0; i--) {
+      const fx = slowEffects[i];
+      fx.timer -= dt;
+      if (fx.timer <= 0) {
+        if (world.isAlive(fx.entity) && world.has(fx.entity, C.Enemy)) {
+          const restored = isFinite(fx.speed) && fx.speed > 0 ? fx.speed : 50;
+          world.get<Enemy>(fx.entity, C.Enemy).speed = restored;
+        }
+        slowEffects[i] = slowEffects[slowEffects.length - 1];
+        slowEffects.pop();
+      }
+    }
+
     for (const pe of world.query(C.Player, C.Pos)) {
       const player = world.get<Player>(pe, C.Player);
       const pPos = world.get<Pos>(pe, C.Pos);
@@ -115,7 +223,7 @@ export function createWeaponSystem(
           case 'holy_aura': {
             // Damage all enemies in range
             const enemies = spatialHash.query(pPos.x, pPos.y, lvl.size);
-            const seen = new Set<Entity>();
+            seen.clear();
             for (const candidate of enemies) {
               if (seen.has(candidate) || !world.has(candidate, C.Enemy)) continue;
               seen.add(candidate);
@@ -127,8 +235,10 @@ export function createWeaponSystem(
               if (lvl.knockback > 0) {
                 const dist = Math.sqrt(dx * dx + dy * dy) || 1;
                 const vel = world.get<Vel>(candidate, C.Vel);
-                vel.x += (dx / dist) * lvl.knockback;
-                vel.y += (dy / dist) * lvl.knockback;
+                const kbx = (dx / dist) * lvl.knockback;
+                const kby = (dy / dist) * lvl.knockback;
+                if (isFinite(kbx)) vel.x += kbx;
+                if (isFinite(kby)) vel.y += kby;
               }
             }
             // Visual pulse
@@ -139,7 +249,7 @@ export function createWeaponSystem(
           case 'lightning': {
             const enemies = spatialHash.query(pPos.x, pPos.y, lvl.size);
             const validTargets: Entity[] = [];
-            const seen = new Set<Entity>();
+            seen.clear();
             for (const candidate of enemies) {
               if (seen.has(candidate) || !world.has(candidate, C.Enemy)) continue;
               seen.add(candidate);
@@ -148,8 +258,10 @@ export function createWeaponSystem(
               if (dx * dx + dy * dy <= lvl.size * lvl.size) validTargets.push(candidate);
             }
             for (let i = 0; i < Math.min(lvl.count, validTargets.length); i++) {
-              const idx = Math.floor(Math.random() * validTargets.length);
-              const target = validTargets.splice(idx, 1)[0];
+              const idx = Math.floor(Math.random() * (validTargets.length - i)) + i;
+              // Swap selected target to front (swap-and-pop avoids splice O(n))
+              const target = validTargets[idx];
+              validTargets[idx] = validTargets[i];
               const ePos = world.get<Pos>(target, C.Pos);
               applyDamage(world, target, lvl.damage * (1 + gameState.damageMult), particles, floatingText, player);
               // Lightning visual entity
@@ -163,7 +275,7 @@ export function createWeaponSystem(
 
           case 'frost_nova': {
             const enemies = spatialHash.query(pPos.x, pPos.y, lvl.size);
-            const seen = new Set<Entity>();
+            seen.clear();
             for (const candidate of enemies) {
               if (seen.has(candidate) || !world.has(candidate, C.Enemy)) continue;
               seen.add(candidate);
@@ -174,18 +286,17 @@ export function createWeaponSystem(
               // Knockback
               const dist = Math.sqrt(dx * dx + dy * dy) || 1;
               const vel = world.get<Vel>(candidate, C.Vel);
-              vel.x += (dx / dist) * lvl.knockback;
-              vel.y += (dy / dist) * lvl.knockback;
-              // Slow effect
+              const kbx = (dx / dist) * lvl.knockback;
+              const kby = (dy / dist) * lvl.knockback;
+              if (isFinite(kbx)) vel.x += kbx;
+              if (isFinite(kby)) vel.y += kby;
+              // Slow effect — frame-based timer instead of setTimeout
               const enemy = world.get<Enemy>(candidate, C.Enemy);
+              const def = ENEMIES[enemy.type];
+              let baseSpeed = def ? def.speed * (1 + gameState.gameTime / GAME_DURATION * 0.3) : 50;
+              if (!isFinite(baseSpeed) || baseSpeed <= 0) baseSpeed = 50;
               enemy.speed *= 0.3;
-              // Restore speed after 2 seconds via timer
-              setTimeout(() => {
-                if (world.isAlive(candidate)) {
-                  const def = Object.values(ENEMIES).find(d => d.name.toLowerCase().replace(' ', '') === enemy.type);
-                  if (def) enemy.speed = def.speed * (1 + gameState.gameTime / GAME_DURATION * 0.3);
-                }
-              }, 2000);
+              slowEffects.push({ entity: candidate, speed: baseSpeed, timer: 2.0 });
             }
             particles.emit(pPos.x, pPos.y, 24, { color: wDef.color, speed: lvl.size * 2, life: 0.4, size: 5, sizeEnd: 1 });
             break;
@@ -207,8 +318,7 @@ export function createWeaponSystem(
             } as Projectile);
             world.add(fire, C.Collider, { radius: lvl.size });
             // Randomize fire color for realistic flame effect
-            const fireColors = ['#ff6600', '#ff8822', '#ffaa00', '#ff4400', '#ffcc33'];
-            const fc = fireColors[Math.floor(Math.random() * fireColors.length)];
+            const fc = FIRE_COLORS[Math.floor(Math.random() * FIRE_COLORS.length)];
             world.add(fire, C.Visual, { shape: 'flame', color: fc, size: lvl.size } as Visual);
             // Slight upward drift like real fire
             world.add(fire, C.Vel, { x: (Math.random() - 0.5) * 6, y: -10 - Math.random() * 8 });
@@ -246,6 +356,8 @@ export function createCollisionSystem(
   particles: ParticleSystem,
   floatingText: FloatingTextManager
 ) {
+  const seen = new Set<Entity>();
+
   return (world: World, _dt: number) => {
     // Rebuild spatial hash every frame
     spatialHash.clear();
@@ -255,6 +367,10 @@ export function createCollisionSystem(
       spatialHash.insert(e, pos.x, pos.y, col.radius);
     }
 
+    // Hoist player query — used for stat tracking in projectile hits
+    const playerEntities = world.query(C.Player);
+    const player = playerEntities.length > 0 ? world.get<Player>(playerEntities[0], C.Player) : undefined;
+
     // Projectile vs Enemy
     for (const pe of world.query(C.Projectile, C.Pos, C.Collider)) {
       const proj = world.get<Projectile>(pe, C.Projectile);
@@ -262,7 +378,7 @@ export function createCollisionSystem(
       const pCol = world.get<Collider>(pe, C.Collider);
 
       const nearby = spatialHash.query(pPos.x, pPos.y, pCol.radius + 40);
-      const seen = new Set<Entity>();
+      seen.clear();
       for (const candidate of nearby) {
         if (seen.has(candidate) || candidate === pe || !world.has(candidate, C.Enemy)) continue;
         seen.add(candidate);
@@ -273,9 +389,6 @@ export function createCollisionSystem(
         const distSq = dx * dx + dy * dy;
         const minDist = pCol.radius + eCol.radius;
         if (distSq < minDist * minDist) {
-          // Get player for stat tracking
-          const players = world.query(C.Player);
-          const player = players.length > 0 ? world.get<Player>(players[0], C.Player) : undefined;
           applyDamage(world, candidate, proj.damage, particles, floatingText, player);
           proj.hitEntities.add(candidate);
           proj.pierce--;
@@ -296,7 +409,7 @@ export function createCollisionSystem(
     if (playerHp.invuln > 0) return;
 
     const nearby = spatialHash.query(playerPos.x, playerPos.y, playerCol.radius + 20);
-    const seen = new Set<Entity>();
+    seen.clear();
     for (const candidate of nearby) {
       if (seen.has(candidate) || !world.has(candidate, C.Enemy)) continue;
       seen.add(candidate);
@@ -341,9 +454,11 @@ export function createPickupSystem(particles: ParticleSystem, floatingText: Floa
 
       if (gem.attracted) {
         const dist = Math.sqrt(distSq) || 1;
-        const speed = 400 + 200 * (1 - dist / (pickupRange * 2));
-        gPos.x += (dx / dist) * speed * dt;
-        gPos.y += (dy / dist) * speed * dt;
+        const speed = 400 + 200 * clamp(1 - dist / (pickupRange * 2), 0, 1);
+        const moveX = (dx / dist) * speed * dt;
+        const moveY = (dy / dist) * speed * dt;
+        if (isFinite(moveX)) gPos.x += moveX;
+        if (isFinite(moveY)) gPos.y += moveY;
       }
 
       // Collect
@@ -444,11 +559,12 @@ function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime: number
     glowSize: def.isBoss ? 20 : 8,
     rotation: 0,
   } as Visual);
+  world.add(e, C.BehaviorTree, { blackboard: new Blackboard() } as BehaviorTreeData);
 }
 
 // ─── DEATH SYSTEM ────────────────────────────────────────────────────
 export function createDeathSystem(particles: ParticleSystem) {
-  return (world: World, _dt: number) => {
+  return (world: World, dt: number) => {
     for (const e of world.query(C.Health, C.Pos)) {
       const hp = world.get<Health>(e, C.Health);
       if (hp.current > 0) continue;
@@ -495,7 +611,7 @@ export function createDeathSystem(particles: ParticleSystem) {
     // Update invulnerability timers
     for (const e of world.query(C.Health)) {
       const hp = world.get<Health>(e, C.Health);
-      if (hp.invuln > 0) hp.invuln -= 1 / 60;
+      if (hp.invuln > 0) hp.invuln -= dt;
     }
   };
 }
@@ -589,6 +705,7 @@ export function createBonusPickupSystem(
   spatialHash: SpatialHash<Entity>,
 ) {
   let bombTickTimer = 0;
+  const seen = new Set<Entity>();
 
   return (world: World, dt: number) => {
     const players = world.query(C.Player, C.Pos, C.Collider);
@@ -624,7 +741,7 @@ export function createBonusPickupSystem(
       if (bombTickTimer <= 0) {
         bombTickTimer = 0.5;
         const enemies = spatialHash.query(pPos.x, pPos.y, 200);
-        const seen = new Set<Entity>();
+        seen.clear();
         for (const candidate of enemies) {
           if (seen.has(candidate) || !world.has(candidate, C.Enemy)) continue;
           seen.add(candidate);

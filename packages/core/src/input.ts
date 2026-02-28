@@ -54,6 +54,17 @@ export class InputManager {
     return this.isMobile ? this.aimId !== null : this.mouseMoved;
   }
 
+  /** Remove all event listeners to prevent leaks */
+  destroy(): void {
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
+    this.canvas.removeEventListener('touchstart', this.onTouchStart);
+    this.canvas.removeEventListener('touchmove', this.onTouchMove);
+    this.canvas.removeEventListener('touchend', this.onTouchEnd);
+    this.canvas.removeEventListener('mousedown', this.onMouseDown);
+    this.canvas.removeEventListener('mousemove', this.onMouseMove);
+  }
+
   /** Call once per frame after systems have read input */
   clearFrame(): void {
     this._anyKey = false;
@@ -112,40 +123,15 @@ export class InputManager {
     }
   }
 
-  /** Draw movement joystick (left, cyan) */
-  drawJoystick(ctx: CanvasRenderingContext2D): void {
-    if (this.moveId === null) return;
-    this.drawJoystickVisual(ctx, this.moveStart, this.moveCurrent, '#00ffff');
-  }
+  get moveJoystickActive(): boolean { return this.moveId !== null; }
+  get moveJoystickStart(): Readonly<Vec2> { return this.moveStart; }
+  get moveJoystickCurrent(): Readonly<Vec2> { return this.moveCurrent; }
 
-  /** Draw aim joystick (right, orange) */
-  drawAimJoystick(ctx: CanvasRenderingContext2D): void {
-    if (this.aimId === null) return;
-    this.drawJoystickVisual(ctx, this.aimStart, this.aimCurrent, '#ff6633');
-  }
+  get aimJoystickActive(): boolean { return this.aimId !== null; }
+  get aimJoystickStart(): Readonly<Vec2> { return this.aimStart; }
+  get aimJoystickCurrent(): Readonly<Vec2> { return this.aimCurrent; }
 
-  private drawJoystickVisual(ctx: CanvasRenderingContext2D, start: Vec2, current: Vec2, color: string): void {
-    const sx = start.x, sy = start.y;
-    const cx = current.x, cy = current.y;
-
-    ctx.save();
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(sx, sy, 60, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.globalAlpha = 0.5;
-    ctx.fillStyle = color;
-    const dx = cx - sx, dy = cy - sy;
-    const dist = Math.min(Math.sqrt(dx * dx + dy * dy), 40);
-    const angle = Math.atan2(dy, dx);
-    ctx.beginPath();
-    ctx.arc(sx + Math.cos(angle) * dist, sy + Math.sin(angle) * dist, 24, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
+  /** @deprecated Use moveJoystickActive instead */
   get joystickActive(): boolean { return this.moveId !== null; }
 
   private onKeyDown = (e: KeyboardEvent) => {
