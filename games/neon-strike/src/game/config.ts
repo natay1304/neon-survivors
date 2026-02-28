@@ -58,7 +58,7 @@ export interface EnemyDef {
   scoreValue: number;
   color: string;
   size: number;
-  shape: 'circle' | 'triangle' | 'diamond' | 'square' | 'star4' | 'spike';
+  shape: 'circle' | 'triangle' | 'diamond' | 'square' | 'star4' | 'spike' | 'hexagon';
   canShoot: boolean;
   shootCooldown: number;
   shootSpeed: number;
@@ -97,6 +97,26 @@ export const ENEMIES: Record<string, EnemyDef> = {
     canShoot: true, shootCooldown: 1.5, shootSpeed: 250,
     isBoss: true,
   },
+  sniper: {
+    name: 'Sniper', hp: 25, speed: 35, damage: 25, scoreValue: 35,
+    color: '#ff88ff', size: 10, shape: 'diamond',
+    canShoot: true, shootCooldown: 3.0, shootSpeed: 500,
+  },
+  swarm: {
+    name: 'Swarm', hp: 12, speed: 120, damage: 5, scoreValue: 5,
+    color: '#88ff88', size: 7, shape: 'circle',
+    canShoot: false, shootCooldown: 0, shootSpeed: 0,
+  },
+  exploder: {
+    name: 'Exploder', hp: 50, speed: 90, damage: 40, scoreValue: 30,
+    color: '#ff8800', size: 13, shape: 'spike',
+    canShoot: false, shootCooldown: 0, shootSpeed: 0,
+  },
+  healer: {
+    name: 'Healer', hp: 60, speed: 45, damage: 8, scoreValue: 45,
+    color: '#44ffaa', size: 11, shape: 'hexagon',
+    canShoot: false, shootCooldown: 0, shootSpeed: 0,
+  },
 };
 
 export interface LevelDef {
@@ -118,9 +138,9 @@ export const LEVELS: LevelDef[] = [
   { enemies: [{ type: 'shooter', count: 8 }, { type: 'tank', count: 3 }, { type: 'flanker', count: 5 }], crates: 6, barrels: 5, arenaWidth: 1500, arenaHeight: 1050, isBoss: false },
   { enemies: [{ type: 'grunt', count: 8 }, { type: 'tank', count: 4 }, { type: 'flanker', count: 4 }, { type: 'boss', count: 1 }], crates: 7, barrels: 5, arenaWidth: 1600, arenaHeight: 1100, isBoss: true },
   // Zone 3: Hard
-  { enemies: [{ type: 'runner', count: 12 }, { type: 'shooter', count: 8 }, { type: 'tank', count: 5 }], crates: 6, barrels: 6, arenaWidth: 1600, arenaHeight: 1100, isBoss: false },
-  { enemies: [{ type: 'flanker', count: 10 }, { type: 'shooter', count: 10 }, { type: 'tank', count: 6 }, { type: 'runner', count: 8 }], crates: 8, barrels: 7, arenaWidth: 1800, arenaHeight: 1200, isBoss: false },
-  { enemies: [{ type: 'grunt', count: 10 }, { type: 'shooter', count: 8 }, { type: 'tank', count: 5 }, { type: 'flanker', count: 6 }, { type: 'boss', count: 1 }], crates: 10, barrels: 8, arenaWidth: 2000, arenaHeight: 1300, isBoss: true },
+  { enemies: [{ type: 'runner', count: 12 }, { type: 'shooter', count: 8 }, { type: 'tank', count: 5 }, { type: 'sniper', count: 4 }], crates: 6, barrels: 6, arenaWidth: 1600, arenaHeight: 1100, isBoss: false },
+  { enemies: [{ type: 'flanker', count: 10 }, { type: 'shooter', count: 10 }, { type: 'tank', count: 6 }, { type: 'swarm', count: 12 }, { type: 'healer', count: 3 }], crates: 8, barrels: 7, arenaWidth: 1800, arenaHeight: 1200, isBoss: false },
+  { enemies: [{ type: 'grunt', count: 10 }, { type: 'shooter', count: 8 }, { type: 'tank', count: 5 }, { type: 'flanker', count: 6 }, { type: 'exploder', count: 4 }, { type: 'sniper', count: 3 }, { type: 'boss', count: 1 }], crates: 10, barrels: 8, arenaWidth: 2000, arenaHeight: 1300, isBoss: true },
 ];
 
 export const TOTAL_LEVELS = LEVELS.length;

@@ -97,6 +97,38 @@ export const bossTree: BehaviorNode = selector(
 // Simple fallback for LOD
 export const simpleLODTree: BehaviorNode = seek(playerTarget);
 
+// Sniper — stay far, shoot from distance
+export const sniperTree: BehaviorNode = selector(
+  sequence(
+    checkDistance(playerTarget, '<', 200),
+    flee(playerTarget),
+  ),
+  sequence(
+    checkDistance(playerTarget, '<', 500),
+    orbit(playerTarget, 350, 1.0),
+  ),
+  seek(playerTarget),
+);
+
+// Swarm — direct fast rush
+export const swarmTree: BehaviorNode = seek(playerTarget);
+
+// Exploder — rush toward player
+export const exploderTree: BehaviorNode = seek(playerTarget);
+
+// Healer — orbit at distance, stays away
+export const healerTree: BehaviorNode = selector(
+  sequence(
+    checkDistance(playerTarget, '<', 180),
+    flee(playerTarget),
+  ),
+  sequence(
+    checkDistance(playerTarget, '<', 400),
+    orbit(playerTarget, 280, 1.2),
+  ),
+  seek(playerTarget),
+);
+
 // Registry
 export const ENEMY_TREES: Record<string, BehaviorNode> = {
   grunt: gruntTree,
@@ -105,4 +137,8 @@ export const ENEMY_TREES: Record<string, BehaviorNode> = {
   tank: tankTree,
   flanker: flankerTree,
   boss: bossTree,
+  sniper: sniperTree,
+  swarm: swarmTree,
+  exploder: exploderTree,
+  healer: healerTree,
 };

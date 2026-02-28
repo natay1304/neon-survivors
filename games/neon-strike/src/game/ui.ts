@@ -11,6 +11,7 @@ export class UIManager {
     private ctx: CanvasRenderingContext2D,
     private onRestart: () => void,
     private onNextLevel: () => void,
+    private onResume: () => void,
   ) {
     this.ctx.canvas.addEventListener('click', this.onClick);
     this.ctx.canvas.addEventListener('touchend', this.onTouch);
@@ -193,29 +194,39 @@ export class UIManager {
     ctx.fillStyle = '#ff3366';
     ctx.font = `bold ${mobile ? 32 : 42}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('PAUSED', w / 2, h / 2 - 20);
+    ctx.fillText('PAUSED', w / 2, h / 2 - 50);
     ctx.restore();
 
-    ctx.textAlign = 'center';
-    ctx.font = `${mobile ? 14 : 16}px monospace`;
-    ctx.fillStyle = '#8888aa';
-    ctx.fillText(mobile ? 'Tap to resume' : 'ESC to resume', w / 2, h / 2 + 20);
-
-    // Restart button
+    // Resume button (green, above)
     const btnW = 180, btnH = 38;
-    const btnX = w / 2 - btnW / 2;
-    const btnY = h / 2 + (mobile ? 55 : 60);
-    const hover = this.isHovering(btnX, btnY, btnW, btnH);
+    const resumeX = w / 2 - btnW / 2;
+    const resumeY = h / 2 + (mobile ? 0 : 5);
+    const resumeHover = this.isHovering(resumeX, resumeY, btnW, btnH);
 
-    ctx.fillStyle = hover ? '#2a1a1a' : '#1a1010';
-    ctx.fillRect(btnX, btnY, btnW, btnH);
+    ctx.fillStyle = resumeHover ? '#1a3a1a' : '#0a2a0a';
+    ctx.fillRect(resumeX, resumeY, btnW, btnH);
+    ctx.strokeStyle = '#44ff44';
+    ctx.lineWidth = resumeHover ? 2 : 1;
+    ctx.strokeRect(resumeX, resumeY, btnW, btnH);
+
+    ctx.fillStyle = '#44ff44';
+    ctx.textAlign = 'center';
+    ctx.font = `bold ${mobile ? 14 : 15}px monospace`;
+    ctx.fillText('RESUME', w / 2, resumeY + 25);
+
+    // Retry button (red, below)
+    const retryY = resumeY + btnH + 12;
+    const retryHover = this.isHovering(resumeX, retryY, btnW, btnH);
+
+    ctx.fillStyle = retryHover ? '#2a1a1a' : '#1a1010';
+    ctx.fillRect(resumeX, retryY, btnW, btnH);
     ctx.strokeStyle = '#ff4444';
-    ctx.lineWidth = hover ? 2 : 1;
-    ctx.strokeRect(btnX, btnY, btnW, btnH);
+    ctx.lineWidth = retryHover ? 2 : 1;
+    ctx.strokeRect(resumeX, retryY, btnW, btnH);
 
     ctx.fillStyle = '#ff4444';
     ctx.font = `bold ${mobile ? 14 : 15}px monospace`;
-    ctx.fillText('RESTART', w / 2, btnY + 25);
+    ctx.fillText('RETRY', w / 2, retryY + 25);
   }
 
   // ─── Mouse tracking ─────────────────────────────────────────────
@@ -268,8 +279,13 @@ export class UIManager {
       const mobile = w < 600;
       const btnW = 180, btnH = 38;
       const btnX = w / 2 - btnW / 2;
-      const btnY = h / 2 + (mobile ? 55 : 60);
-      if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
+      const resumeY = h / 2 + (mobile ? 0 : 5);
+      const retryY = resumeY + btnH + 12;
+      if (x >= btnX && x <= btnX + btnW && y >= resumeY && y <= resumeY + btnH) {
+        this.onResume();
+        return;
+      }
+      if (x >= btnX && x <= btnX + btnW && y >= retryY && y <= retryY + btnH) {
         this.onRestart();
         return;
       }

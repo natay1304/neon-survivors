@@ -1,8 +1,8 @@
 /** NeonStrikeScene — implements Scene, orchestrates all game systems */
 
-import { World, Camera2D, SpatialHash, ParticleSystem, FloatingTextManager, type Scene, type GameContext, Vel, Collider } from '@survivors/core';
+import { World, Camera2D, SpatialHash, ParticleSystem, FloatingTextManager, createDevCheatPanel, type CheatPanel, type Scene, type GameContext, Vel, Collider } from '@survivors/core';
 import { C, type Pos, type Health, type Player, type Visual } from './components';
-import { LEVELS, TOTAL_LEVELS } from './config';
+import { LEVELS, TOTAL_LEVELS, WEAPONS } from './config';
 import { GameRenderer } from './renderer';
 import { UIManager, type GameScreen } from './ui';
 import type { AdPlatform } from '@survivors/sdk';
@@ -50,6 +50,7 @@ export class NeonStrikeScene implements Scene {
   private playerScore = 0;
 
   private gameCtx: GameContext | null = null;
+  private cheats: CheatPanel | null = null;
 
   private onKeyDown = (e: KeyboardEvent) => {
     if (e.code === 'Escape') {
@@ -73,6 +74,7 @@ export class NeonStrikeScene implements Scene {
       this.ctx2d,
       () => this.restart(),
       () => this.nextLevel(),
+      () => this.resumeFromPause(),
     );
   }
 
@@ -90,6 +92,8 @@ export class NeonStrikeScene implements Scene {
   exit(_ctx: GameContext): void {
     window.removeEventListener('keydown', this.onKeyDown);
     this.ui.destroy();
+    this.cheats?.destroy();
+    this.cheats = null;
     this.gameCtx = null;
   }
 
@@ -114,6 +118,16 @@ export class NeonStrikeScene implements Scene {
     }
 
     if (this.screen !== 'playing') return;
+
+    // Cheat: god mode
+    if (this.cheats?.isEnabled('godMode') && this.playerId >= 0) {
+      const hp = this.world.get<Health>(this.playerId, C.Health);
+      hp.current = hp.max;
+    }
+
+    // Cheat: game speed multiplier
+    const speedMult = this.cheats?.getNumber('gameSpeed', 1) ?? 1;
+    dt *= speedMult;
 
     this.world.update(dt);
     this.particles.update(dt);
@@ -241,7 +255,7 @@ export class NeonStrikeScene implements Scene {
       lastDirY: -1,
     } as Player);
     this.world.add(this.playerId, C.Visual, {
-      shape: 'rocket', color: '#00ffff', size: 13,
+      shape: 'mech', color: '#00ffff', size: 13,
       glow: '#0088ff', glowSize: 12, rotation: 0,
     } as Visual);
 
@@ -273,6 +287,22 @@ export class NeonStrikeScene implements Scene {
     spawnDestructibles(this.world, level.arenaWidth, level.arenaHeight, level.crates, level.barrels);
 
     this.camera.pos.set(0, 0);
+
+    // Dev cheats (created once)
+    if (!this.cheats) {
+      this.cheats = createDevCheatPanel({
+        onPause: () => {
+          this.screen = 'paused';
+          this.ads.gameplayStop();
+        },
+        onResume: () => {
+          this.applyDeferredCheats();
+          this.screen = 'playing';
+          this.ads.gameplayStart();
+        },
+      });
+      if (this.cheats) this.initCheats();
+    }
   }
 
   private _savedLives = 3;
@@ -329,5 +359,83 @@ export class NeonStrikeScene implements Scene {
         this.ads.gameplayStart();
       }
     });
+  }
+
+  private resumeFromPause(): void {
+    if (this.screen === 'paused') {
+      this.screen = 'playing';
+      this.ads.gameplayStart();
+    }
+  }
+
+  private initCheats(): void {
+    if (!this.cheats) return;
+
+    this.cheats.addSection({
+      title: '👤 Player',
+      items: [
+        { type: 'toggle', label: '🛡 God Mode', key: 'godMode', default: false },
+        { type: 'button', label: '❤️ Heal to Full', action: () => {
+          if (this.playerId < 0) return;
+          const hp = this.world.get<Health>(this.playerId, C.Health);
+          hp.current = hp.max;
+        }},
+        { type: 'slider', label: 'Speed', key: 'playerSpeed', min: 100, max: 800, step: 50, default: 200 },
+      ],
+    });
+
+    this.cheats.addSection({
+      title: '🔫 Weapons',
+      items: [
+        { type: 'button', label: '🔓 Give All Weapons', action: () => {
+          if (this.playerId < 0) return;
+          const player = this.world.get<Player>(this.playerId, C.Player);
+          for (const wKey of Object.keys(WEAPONS)) {
+            if (!player.weapons.find(w => w.type === wKey)) {
+              player.weapons.push({ type: wKey, ammo: WEAPONS[wKey].defaultAmmo, timer: 0 });
+            }
+          }
+        }},
+        { type: 'toggle', label: '∞ Infinite Ammo', key: 'infiniteAmmo', default: false },
+      ],
+    });
+
+    this.cheats.addSection({
+      title: '👾 Enemies',
+      items: [
+        { type: 'button', label: '💀 Kill All', action: () => {
+          for (const e of this.world.query(C.Enemy, C.Health)) {
+            const hp = this.world.get<Health>(e, C.Health);
+            hp.current = 0;
+          }
+        }},
+        { type: 'button', label: '🧹 Remove All', action: () => {
+          for (const e of this.world.query(C.Enemy)) {
+            this.world.destroy(e);
+          }
+        }},
+      ],
+    });
+
+    this.cheats.addSection({
+      title: '🎮 Game',
+      items: [
+        { type: 'slider', label: 'Game Speed', key: 'gameSpeed', min: 0.25, max: 4, step: 0.25, default: 1 },
+      ],
+    });
+  }
+
+  private applyDeferredCheats(): void {
+    if (!this.cheats || this.playerId < 0) return;
+
+    const speed = this.cheats.getNumber('playerSpeed', 200);
+    const player = this.world.get<Player>(this.playerId, C.Player);
+    player.speed = speed;
+
+    if (this.cheats.isEnabled('infiniteAmmo')) {
+      for (const w of player.weapons) {
+        if (w.ammo > 0) w.ammo = 999;
+      }
+    }
   }
 }

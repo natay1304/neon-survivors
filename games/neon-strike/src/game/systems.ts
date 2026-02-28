@@ -464,6 +464,26 @@ export function createCollisionSystem(
         }
       }
     }
+
+    // Player/Enemy → Destructible push-out
+    const destructibles = world.query(C.Destructible, C.Pos, C.Collider);
+    for (const e of world.query(C.Pos, C.Collider)) {
+      if (!world.has(e, C.Player) && !world.has(e, C.Enemy)) continue;
+      const pos = world.get<Pos>(e, C.Pos);
+      const col = world.get<Collider>(e, C.Collider);
+      for (const d of destructibles) {
+        const dPos = world.get<Pos>(d, C.Pos);
+        const dCol = world.get<Collider>(d, C.Collider);
+        if (circleVsCircle(pos.x, pos.y, col.radius, dPos.x, dPos.y, dCol.radius)) {
+          const dx = pos.x - dPos.x;
+          const dy = pos.y - dPos.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+          const overlap = col.radius + dCol.radius - dist;
+          pos.x += (dx / dist) * overlap;
+          pos.y += (dy / dist) * overlap;
+        }
+      }
+    }
   };
 }
 
@@ -642,7 +662,7 @@ export function createWaveSystem(waveState: WaveState) {
   };
 }
 
-function spawnEnemy(world: World, type: string, arenaW: number, arenaH: number): void {
+export function spawnEnemy(world: World, type: string, arenaW: number, arenaH: number): void {
   const def = ENEMIES[type];
   if (!def) return;
 
@@ -701,6 +721,14 @@ export function createArenaBoundsSystem(arenaW: number, arenaH: number) {
   const hh = arenaH / 2;
   return (world: World, _dt: number) => {
     for (const e of world.query(C.Player, C.Pos, C.Collider)) {
+      const pos = world.get<Pos>(e, C.Pos);
+      const col = world.get<Collider>(e, C.Collider);
+      if (pos.x - col.radius < -hw) pos.x = -hw + col.radius;
+      if (pos.x + col.radius > hw) pos.x = hw - col.radius;
+      if (pos.y - col.radius < -hh) pos.y = -hh + col.radius;
+      if (pos.y + col.radius > hh) pos.y = hh - col.radius;
+    }
+    for (const e of world.query(C.Enemy, C.Pos, C.Collider)) {
       const pos = world.get<Pos>(e, C.Pos);
       const col = world.get<Collider>(e, C.Collider);
       if (pos.x - col.radius < -hw) pos.x = -hw + col.radius;
