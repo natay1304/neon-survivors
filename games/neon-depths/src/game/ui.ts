@@ -1,6 +1,7 @@
 /** UI screens — menu, upgrade choice, game over, victory, pause, room clear */
 
 import { UPGRADES, WEAPON_POOL, WEAPONS } from './config';
+import { roundRect } from '@survivors/core';
 
 export type GameScreen =
   | 'menu'
@@ -161,7 +162,7 @@ export class UIManager {
       c.fillStyle = isHover ? 'rgba(40, 40, 80, 0.9)' : 'rgba(20, 20, 50, 0.9)';
       c.strokeStyle = isHover ? '#ffcc00' : '#444466';
       c.lineWidth = 2;
-      this.roundRect(cx, cardY, cardW, cardH, 8);
+      roundRect(c, cx, cardY, cardW, cardH, 8);
       c.fill();
       c.stroke();
       c.restore();
@@ -288,7 +289,7 @@ export class UIManager {
     c.fillStyle = hover ? color : 'rgba(20, 20, 50, 0.9)';
     c.strokeStyle = color;
     c.lineWidth = 2;
-    this.roundRect(x, y, w, h, 6);
+    roundRect(c, x, y, w, h, 6);
     c.fill();
     c.stroke();
 
@@ -298,21 +299,6 @@ export class UIManager {
     c.font = 'bold 14px monospace';
     c.fillText(label, x + w / 2, y + h / 2);
     c.restore();
-  }
-
-  private roundRect(x: number, y: number, w: number, h: number, r: number): void {
-    const c = this.ctx;
-    c.beginPath();
-    c.moveTo(x + r, y);
-    c.lineTo(x + w - r, y);
-    c.quadraticCurveTo(x + w, y, x + w, y + r);
-    c.lineTo(x + w, y + h - r);
-    c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    c.lineTo(x + r, y + h);
-    c.quadraticCurveTo(x, y + h, x, y + h - r);
-    c.lineTo(x, y + r);
-    c.quadraticCurveTo(x, y, x + r, y);
-    c.closePath();
   }
 
   private onClick = (ev: MouseEvent): void => {

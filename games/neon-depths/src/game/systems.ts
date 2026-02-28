@@ -561,12 +561,9 @@ export function createWaveSystem(waveState: WaveState, floorDef: FloorDef) {
 
     waveState.spawnTimer -= dt;
 
-    // Spawn from queue
-    while (waveState.enemyQueue.length > 0 && waveState.spawnTimer <= waveState.enemyQueue[0].delay * 0) {
-      const next = waveState.enemyQueue[0];
-      if (waveState.spawnTimer > 0) break;
-
-      waveState.enemyQueue.shift();
+    // Spawn from queue when timer reaches zero
+    while (waveState.enemyQueue.length > 0 && waveState.spawnTimer <= 0) {
+      const next = waveState.enemyQueue.shift()!;
       waveState.spawnedEnemies++;
 
       const def = ENEMIES[next.type];
@@ -591,10 +588,6 @@ export function createWaveSystem(waveState: WaveState, floorDef: FloorDef) {
       world.add(e, C.BehaviorTree, { blackboard: new Blackboard() } as BehaviorTreeData);
 
       waveState.spawnTimer = 0.5;
-    }
-
-    if (waveState.spawnTimer > 0 && waveState.enemyQueue.length > 0) {
-      // Keep counting down
     }
 
     // Check room cleared
