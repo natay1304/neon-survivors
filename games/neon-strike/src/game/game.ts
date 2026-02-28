@@ -1,7 +1,7 @@
 /** NeonStrikeScene — implements Scene, orchestrates all game systems */
 
-import { World, Camera2D, SpatialHash, ParticleSystem, FloatingTextManager, type Scene, type GameContext } from '@survivors/core';
-import { C, Pos, Vel, Health, Collider, Player, Visual } from './components';
+import { World, Camera2D, SpatialHash, ParticleSystem, FloatingTextManager, type Scene, type GameContext, Vel, Collider } from '@survivors/core';
+import { C, type Pos, type Health, type Player, type Visual } from './components';
 import { LEVELS, TOTAL_LEVELS } from './config';
 import { GameRenderer } from './renderer';
 import { UIManager, type GameScreen } from './ui';

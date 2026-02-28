@@ -1,7 +1,7 @@
 /** All game systems — pure functions operating on the ECS world */
 
 import { Vec2, randomAngle, randomRange, clamp, World, Entity, InputManager, SpatialHash, ParticleSystem, FloatingTextManager, Blackboard, type BTContext } from '@survivors/core';
-import { C, Pos, Vel, Health, Collider, Player, Enemy, Projectile, XPGem, Visual, LightningData, Bonus, type BehaviorTreeData } from './components';
+import { C, Pos, Vel, Health, Collider, Player, Enemy, Projectile, XPGem, Visual, LightningData, Bonus, type BehaviorTreeData, type EnemyProjectile } from './components';
 import { WEAPONS, ENEMIES, ENEMY_SPAWN_DISTANCE, MAX_ENEMIES, GAME_DURATION, BOSS_TIMES, MINIBOSS_TIMES } from './config';
 import { ENEMY_TREES, simpleLODTree } from './enemy-behaviors';
 
@@ -65,6 +65,10 @@ export function createBTEnemySystem(spatialHash: SpatialHash<Entity>) {
     const players = world.query(C.Player, C.Pos);
     if (players.length === 0) return;
     const pPos = world.get<Pos>(players[0], C.Pos);
+    const playerData = world.get<Player>(players[0], C.Player);
+    const playerLevel = playerData.level;
+    // Aggression factor: increases with player level and game time
+    const aggression = 1 + playerLevel * 0.04 + totalTime / GAME_DURATION * 0.3;
 
     for (const e of world.query(C.Enemy, C.Pos, C.Vel, C.BehaviorTree)) {
       const pos = world.get<Pos>(e, C.Pos);
@@ -93,10 +97,32 @@ export function createBTEnemySystem(spatialHash: SpatialHash<Entity>) {
       bb.set('__playerX', pPos.x);
       bb.set('__playerY', pPos.y);
       bb.set('__time', totalTime);
+      bb.set('__playerLevel', playerLevel);
+      bb.set('__aggression', aggression);
 
       // Tick the behavior tree
       const ctx: BTContext = { entity: e, world, dt, blackboard: bb };
       tree(ctx);
+
+      // Handle shooting flag (set by warlock / ranged enemies)
+      if (bb.get<boolean>('__shoot', false)) {
+        bb.delete('__shoot');
+        const sdx = bb.get<number>('__shootDirX', 0);
+        const sdy = bb.get<number>('__shootDirY', 0);
+        if (sdx !== 0 || sdy !== 0) {
+          const projSpeed = 180 + aggression * 20;
+          const projDmg = enemy.damage * 0.6;
+          const ep = world.spawn();
+          world.add(ep, C.Pos, { x: pos.x + sdx * 20, y: pos.y + sdy * 20 });
+          world.add(ep, C.Vel, { x: sdx * projSpeed, y: sdy * projSpeed });
+          world.add(ep, C.EnemyProjectile, { damage: projDmg, lifetime: 3.5 } as EnemyProjectile);
+          world.add(ep, C.Collider, { radius: 6 });
+          world.add(ep, C.Visual, {
+            shape: 'diamond', color: '#ff3366', size: 7,
+            glow: '#cc0033', glowSize: 12, rotation: 0,
+          } as Visual);
+        }
+      }
 
       // Read velocity intent from blackboard
       const bvx = bb.get<number>('__vx', 0);
@@ -406,6 +432,28 @@ export function createCollisionSystem(
     const playerHp = world.get<Health>(playerId, C.Health);
     const playerData = world.get<Player>(playerId, C.Player);
 
+    // Enemy Projectile vs Player (checked before invuln early-return so
+    // projectiles are destroyed on contact regardless of invulnerability)
+    for (const ep of world.query(C.EnemyProjectile, C.Pos, C.Collider)) {
+      const epPos = world.get<Pos>(ep, C.Pos);
+      const epCol = world.get<Collider>(ep, C.Collider);
+      const dx = playerPos.x - epPos.x;
+      const dy = playerPos.y - epPos.y;
+      const distSq = dx * dx + dy * dy;
+      const minDist = playerCol.radius + epCol.radius;
+      if (distSq < minDist * minDist) {
+        if (playerHp.invuln <= 0) {
+          const eProj = world.get<EnemyProjectile>(ep, C.EnemyProjectile);
+          const dmg = Math.max(1, Math.round(eProj.damage - playerData.armor));
+          playerHp.current = Math.max(0, playerHp.current - dmg);
+          playerHp.invuln = 0.5;
+          floatingText.add(playerPos.x, playerPos.y - 20, `-${dmg}`, '#ff3366', 0.8, 20);
+          particles.emit(playerPos.x, playerPos.y, 6, { color: '#ff3366', speed: 100, life: 0.3 });
+        }
+        world.destroy(ep);
+      }
+    }
+
     if (playerHp.invuln > 0) return;
 
     const nearby = spatialHash.query(playerPos.x, playerPos.y, playerCol.radius + 20);
@@ -427,6 +475,22 @@ export function createCollisionSystem(
         particles.emit(playerPos.x, playerPos.y, 6, { color: '#ff4444', speed: 100, life: 0.3 });
         break; // Only take damage from one enemy per frame
       }
+    }
+  };
+}
+
+// ─── ENEMY PROJECTILE SYSTEM ─────────────────────────────────────────
+export function createEnemyProjectileSystem() {
+  return (world: World, dt: number) => {
+    for (const e of world.query(C.EnemyProjectile, C.Pos)) {
+      const eProj = world.get<EnemyProjectile>(e, C.EnemyProjectile);
+      eProj.lifetime -= dt;
+      if (eProj.lifetime <= 0) {
+        world.destroy(e);
+      }
+      // Spin the visual for flair
+      const vis = world.maybe<Visual>(e, C.Visual);
+      if (vis) vis.rotation = (vis.rotation ?? 0) + dt * 8;
     }
   };
 }
@@ -482,6 +546,7 @@ export function createWaveSystem(
     const players = world.query(C.Player, C.Pos);
     if (players.length === 0) return;
     const pPos = world.get<Pos>(players[0], C.Pos);
+    const playerLevel = world.get<Player>(players[0], C.Player).level;
     const time = gameState.gameTime;
     const enemyCount = world.count(C.Enemy);
 
@@ -489,13 +554,13 @@ export function createWaveSystem(
     for (const bt of BOSS_TIMES) {
       if (time >= bt && !gameState.bossSpawned.has(bt)) {
         gameState.bossSpawned.add(bt);
-        spawnEnemy(world, pPos, 'boss', time);
+        spawnEnemy(world, pPos, 'boss', time, playerLevel);
       }
     }
     for (const mt of MINIBOSS_TIMES) {
       if (time >= mt && !gameState.minibossSpawned.has(mt)) {
         gameState.minibossSpawned.add(mt);
-        spawnEnemy(world, pPos, 'miniboss', time);
+        spawnEnemy(world, pPos, 'miniboss', time, playerLevel);
       }
     }
 
@@ -523,12 +588,12 @@ export function createWaveSystem(
         if (roll <= 0) { chosenType = type; break; }
       }
 
-      spawnEnemy(world, pPos, chosenType, time);
+      spawnEnemy(world, pPos, chosenType, time, playerLevel);
     }
   };
 }
 
-function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime: number): void {
+export function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime: number, playerLevel: number = 1): void {
   const def = ENEMIES[type];
   if (!def) return;
 
@@ -540,9 +605,10 @@ function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime: number
 
   // Scale stats with time — accelerates sharply in final minutes
   const t = gameTime / GAME_DURATION; // 0..1
-  const hpMult = 1 + t * 1.5 + Math.max(0, t - 0.6) * 2.0;   // ramps hard after 60%
-  const dmgMult = 1 + t * 1.5 + Math.max(0, t - 0.5) * 1.5;   // ramps after 50%
-  const spdMult = 1 + t * 0.4 + Math.max(0, t - 0.5) * 0.6;   // +70% at end vs +30% before
+  const levelScale = 1 + playerLevel * 0.03; // +3% per player level
+  const hpMult  = (1 + t * 1.5 + Math.max(0, t - 0.6) * 2.0) * levelScale;
+  const dmgMult = (1 + t * 1.5 + Math.max(0, t - 0.5) * 1.5) * levelScale;
+  const spdMult = (1 + t * 0.4 + Math.max(0, t - 0.5) * 0.6) * (1 + playerLevel * 0.01);
 
   const e = world.spawn();
   world.add(e, C.Pos, { x, y });

@@ -78,6 +78,28 @@ export function createLifetimeSystem(lifetimeKey: string) {
   };
 }
 
+// ── Damage Flash System ──────────────────────────────────────────────
+
+interface DamageFlashLike { timer: number }
+
+/**
+ * Create a system that ticks down damage-flash timers and removes the
+ * component when the timer expires. Common hit-flash mechanic.
+ *
+ * @param flashKey — component key for DamageFlash (default: 'flash')
+ */
+export function createDamageFlashSystem(flashKey = 'flash') {
+  return (world: World, dt: number) => {
+    for (const e of world.query(flashKey)) {
+      const flash = world.get<DamageFlashLike>(e, flashKey);
+      flash.timer -= dt;
+      if (flash.timer <= 0) {
+        world.remove(e, flashKey);
+      }
+    }
+  };
+}
+
 // ── Separation (flocking) ────────────────────────────────────────────
 
 /**

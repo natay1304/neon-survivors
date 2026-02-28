@@ -430,6 +430,95 @@ export function wait(duration: number, key?: string): BehaviorNode {
   };
 }
 
+/**
+ * Move toward target with sinusoidal weaving perpendicular to movement direction.
+ * Creates a shambling / serpentine approach pattern.
+ */
+export function zigzagSeek(
+  getTarget: TargetFn,
+  amplitude: number,
+  frequency: number,
+): BehaviorNode {
+  const timerKey = `__zigzag_${_nodeId++}`;
+  return (ctx: BTContext): BehaviorStatus => {
+    const target = getTarget(ctx);
+    if (!target) {
+      ctx.blackboard.set('__vx', 0);
+      ctx.blackboard.set('__vy', 0);
+      return 'success';
+    }
+    const pos = getPos(ctx);
+    const dx = target.x - pos.x;
+    const dy = target.y - pos.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len === 0) {
+      ctx.blackboard.set('__vx', 0);
+      ctx.blackboard.set('__vy', 0);
+      return 'success';
+    }
+
+    let t = ctx.blackboard.get<number>(timerKey, 0);
+    t += ctx.dt;
+    ctx.blackboard.set(timerKey, t);
+
+    const ndx = dx / len;
+    const ndy = dy / len;
+    const perpX = -ndy;
+    const perpY = ndx;
+    const weave = Math.sin(t * frequency) * amplitude;
+
+    const speed = getSpeed(ctx);
+    const mx = ndx + perpX * weave;
+    const my = ndy + perpY * weave;
+    const mLen = Math.sqrt(mx * mx + my * my) || 1;
+    ctx.blackboard.set('__vx', (mx / mLen) * speed);
+    ctx.blackboard.set('__vy', (my / mLen) * speed);
+    return 'success';
+  };
+}
+
+/**
+ * Move toward the target while strafing (circling).
+ * `strafeWeight` (0-1) controls ratio: 0 = pure seek, 1 = pure lateral.
+ */
+export function strafeSeek(
+  getTarget: TargetFn,
+  strafeWeight: number,
+  clockwise: boolean,
+): BehaviorNode {
+  return (ctx: BTContext): BehaviorStatus => {
+    const target = getTarget(ctx);
+    if (!target) {
+      ctx.blackboard.set('__vx', 0);
+      ctx.blackboard.set('__vy', 0);
+      return 'success';
+    }
+    const pos = getPos(ctx);
+    const dx = target.x - pos.x;
+    const dy = target.y - pos.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len === 0) {
+      ctx.blackboard.set('__vx', 0);
+      ctx.blackboard.set('__vy', 0);
+      return 'success';
+    }
+
+    const ndx = dx / len;
+    const ndy = dy / len;
+    const dir = clockwise ? 1 : -1;
+    const perpX = -ndy * dir;
+    const perpY = ndx * dir;
+    const sw = Math.min(1, Math.max(0, strafeWeight));
+    const mx = ndx * (1 - sw) + perpX * sw;
+    const my = ndy * (1 - sw) + perpY * sw;
+    const mLen = Math.sqrt(mx * mx + my * my) || 1;
+    const speed = getSpeed(ctx);
+    ctx.blackboard.set('__vx', (mx / mLen) * speed);
+    ctx.blackboard.set('__vy', (my / mLen) * speed);
+    return 'success';
+  };
+}
+
 /** Set a blackboard variable. Always returns success. */
 export function setVar(
   key: string,

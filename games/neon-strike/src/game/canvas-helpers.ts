@@ -1,14 +1,10 @@
-/** Canvas drawing helpers */
-
-import type { Camera2D, ParticleSystem, FloatingTextManager } from '@survivors/core';
+/**
+ * Canvas2D drawing helpers — re-exported from @survivors/core.
+ * Only drawShape is game-specific (neon-strike visual styles).
+ */
+export { drawJoystick, drawParticles, drawFloatingText, applyCameraToContext } from '@survivors/core';
 
 const TWO_PI = Math.PI * 2;
-
-export function applyCameraToContext(ctx: CanvasRenderingContext2D, camera: Camera2D): void {
-  const cx = camera.width / 2 - camera.pos.x - camera.shakeOffset.x;
-  const cy = camera.height / 2 - camera.pos.y - camera.shakeOffset.y;
-  ctx.translate(cx, cy);
-}
 
 export function drawShape(
   ctx: CanvasRenderingContext2D,
@@ -110,50 +106,4 @@ export function drawShape(
   }
 
   ctx.restore();
-}
-
-export function drawParticles(ctx: CanvasRenderingContext2D, particles: ParticleSystem): void {
-  for (const p of particles.activeParticles) {
-    const t = p.life / p.maxLife;
-    const s = p.size + (p.sizeEnd - p.size) * (1 - t);
-    ctx.globalAlpha = t;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, Math.max(0.5, s), 0, TWO_PI);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-}
-
-export function drawFloatingText(ctx: CanvasRenderingContext2D, ft: FloatingTextManager): void {
-  for (const t of ft.items) {
-    const alpha = t.life / t.maxLife;
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = t.color;
-    ctx.font = `bold ${t.size}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText(t.text, t.x, t.y);
-  }
-  ctx.globalAlpha = 1;
-}
-
-export function drawJoystick(
-  ctx: CanvasRenderingContext2D,
-  start: { x: number; y: number },
-  current: { x: number; y: number },
-  color: string,
-): void {
-  ctx.globalAlpha = 0.3;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(start.x, start.y, 50, 0, TWO_PI);
-  ctx.stroke();
-
-  ctx.globalAlpha = 0.5;
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(current.x, current.y, 20, 0, TWO_PI);
-  ctx.fill();
-  ctx.globalAlpha = 1;
 }

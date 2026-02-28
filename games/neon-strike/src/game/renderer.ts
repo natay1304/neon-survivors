@@ -1,7 +1,7 @@
 /** Game renderer — draws background, entities, effects, HUD */
 
 import { World, Entity, Camera2D, ParticleSystem, FloatingTextManager } from '@survivors/core';
-import { C, Pos, Health, Visual, Player, Pickup, Destructible, Explosion } from './components';
+import { C, type Pos, type Health, type Visual, type Player, type Pickup, type Destructible, type Explosion } from './components';
 import { WEAPONS, TOTAL_LEVELS } from './config';
 import { drawShape, drawParticles, drawFloatingText, applyCameraToContext } from './canvas-helpers';
 
@@ -33,7 +33,7 @@ export class GameRenderer {
 
     // World space
     c.save();
-    applyCameraToContext(c, cam);
+    applyCameraToContext(c, cam.pos, cam.shakeOffset, cam.width, cam.height);
 
     // Arena floor
     this.drawArenaFloor(arenaW, arenaH);

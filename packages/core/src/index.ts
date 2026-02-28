@@ -20,3 +20,5 @@ export * from './canvas-draw';
 export * from './collision';
 export * from './health';
 export * from './systems';
+export * from './components';
+export * from './cheats';

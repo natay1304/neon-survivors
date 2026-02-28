@@ -1,7 +1,13 @@
 /** All ECS systems for Neon Strike */
 
-import { Vec2, randomRange, World, InputManager, SpatialHash, ParticleSystem, FloatingTextManager, Blackboard, type BTContext } from '@survivors/core';
-import { C, Pos, Vel, Health, Collider, Player, Enemy, Projectile, Pickup, Destructible, Visual, Explosion, BehaviorTreeData } from './components';
+import {
+  Vec2, randomRange, World, InputManager, SpatialHash, ParticleSystem, FloatingTextManager, Blackboard, type BTContext,
+  createMovementSystem as coreCreateMovementSystem,
+  createInvulnerabilitySystem,
+  createDamageFlashSystem as coreCreateDamageFlashSystem,
+  circleVsCircle,
+} from '@survivors/core';
+import { C, type Pos, type Vel, type Health, type Collider, type Player, type Enemy, type Projectile, type Pickup, type Destructible, type Visual, type Explosion, type BehaviorTreeData } from './components';
 import { WEAPONS, ENEMIES, LEVELS, WEAPON_DROPS, EXPLOSION_RADIUS, EXPLOSION_DAMAGE, SPAWN_MARGIN } from './config';
 import { ENEMY_TREES, simpleLODTree } from './enemy-behaviors';
 
@@ -246,17 +252,8 @@ export function createBTEnemySystem(spatialHash: SpatialHash<number>) {
   };
 }
 
-// ─── MOVEMENT SYSTEM ──────────────────────────────────────────────────
-export function createMovementSystem() {
-  return (world: World, dt: number) => {
-    for (const e of world.query(C.Pos, C.Vel)) {
-      const pos = world.get<Pos>(e, C.Pos);
-      const vel = world.get<Vel>(e, C.Vel);
-      pos.x += vel.x * dt;
-      pos.y += vel.y * dt;
-    }
-  };
-}
+// ─── MOVEMENT SYSTEM (from core) ──────────────────────────────────────
+export const createMovementSystem = () => coreCreateMovementSystem(C.Pos, C.Vel, C.Player);
 
 // ─── PROJECTILE SYSTEM ────────────────────────────────────────────────
 export function createProjectileSystem() {
@@ -302,10 +299,7 @@ export function createCollisionSystem(
         if (world.has(other, C.Enemy) && world.has(other, C.Health)) {
           const oPos = world.get<Pos>(other, C.Pos);
           const oCol = world.get<Collider>(other, C.Collider);
-          const dx = pPos.x - oPos.x;
-          const dy = pPos.y - oPos.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < pCol.radius + oCol.radius) {
+          if (circleVsCircle(pPos.x, pPos.y, pCol.radius, oPos.x, oPos.y, oCol.radius)) {
             const hp = world.get<Health>(other, C.Health);
             hp.current -= proj.damage;
             proj.hitEntities.add(other);
@@ -339,10 +333,7 @@ export function createCollisionSystem(
         if (world.has(other, C.Destructible)) {
           const oPos = world.get<Pos>(other, C.Pos);
           const oCol = world.get<Collider>(other, C.Collider);
-          const dx = pPos.x - oPos.x;
-          const dy = pPos.y - oPos.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < pCol.radius + oCol.radius) {
+          if (circleVsCircle(pPos.x, pPos.y, pCol.radius, oPos.x, oPos.y, oCol.radius)) {
             const destr = world.get<Destructible>(other, C.Destructible);
             destr.hp -= proj.damage;
             proj.hitEntities.add(other);
@@ -379,10 +370,7 @@ export function createCollisionSystem(
         const plHp = world.get<Health>(pl, C.Health);
         if (plHp.invuln > 0) continue;
 
-        const dx = pPos.x - plPos.x;
-        const dy = pPos.y - plPos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < pCol.radius + plCol.radius) {
+        if (circleVsCircle(pPos.x, pPos.y, pCol.radius, plPos.x, plPos.y, plCol.radius)) {
           plHp.current -= proj.damage;
           plHp.invuln = 0.5;
           floatingText.add(plPos.x, plPos.y - 15, `-${proj.damage}`, '#ff4444', 0.6, 14);
@@ -407,10 +395,7 @@ export function createCollisionSystem(
         const plHp = world.get<Health>(pl, C.Health);
         if (plHp.invuln > 0) continue;
 
-        const dx = ePos.x - plPos.x;
-        const dy = ePos.y - plPos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < eCol.radius + plCol.radius) {
+        if (circleVsCircle(ePos.x, ePos.y, eCol.radius, plPos.x, plPos.y, plCol.radius)) {
           enemy.contactTimer += _dt;
           if (enemy.contactTimer >= 0.5) {
             enemy.contactTimer = 0;
@@ -428,9 +413,7 @@ export function createCollisionSystem(
 
       for (const pl of world.query(C.Player, C.Pos)) {
         const plPos = world.get<Pos>(pl, C.Pos);
-        const dx = pkPos.x - plPos.x;
-        const dy = pkPos.y - plPos.y;
-        if (dx * dx + dy * dy < 30 * 30) {
+        if (circleVsCircle(pkPos.x, pkPos.y, 0, plPos.x, plPos.y, 30)) {
           const pickup = world.get<Pickup>(pk, C.Pickup);
           const player = world.get<Player>(pl, C.Player);
 
@@ -473,9 +456,7 @@ export function createCollisionSystem(
         if (expl.owner === 'player' && world.has(other, C.Player)) continue;
 
         const oPos = world.get<Pos>(other, C.Pos);
-        const dx = exPos.x - oPos.x;
-        const dy = exPos.y - oPos.y;
-        if (dx * dx + dy * dy < expl.radius * expl.radius) {
+        if (circleVsCircle(exPos.x, exPos.y, expl.radius, oPos.x, oPos.y, 0)) {
           const hp = world.get<Health>(other, C.Health);
           hp.current -= expl.damage;
           expl.hitEntities.add(other);
@@ -708,28 +689,11 @@ export function createPickupSystem() {
   };
 }
 
-// ─── DAMAGE FLASH ─────────────────────────────────────────────────────
-export function createDamageFlashSystem() {
-  return (world: World, dt: number) => {
-    for (const e of world.query(C.DamageFlash)) {
-      const flash = world.get<{ timer: number }>(e, C.DamageFlash);
-      flash.timer -= dt;
-      if (flash.timer <= 0) {
-        world.remove(e, C.DamageFlash);
-      }
-    }
-  };
-}
+// ─── DAMAGE FLASH (from core) ─────────────────────────────────────────
+export const createDamageFlashSystem = () => coreCreateDamageFlashSystem(C.DamageFlash);
 
-// ─── INVULN TICK ──────────────────────────────────────────────────────
-export function createInvulnSystem() {
-  return (world: World, dt: number) => {
-    for (const e of world.query(C.Health)) {
-      const hp = world.get<Health>(e, C.Health);
-      if (hp.invuln > 0) hp.invuln -= dt;
-    }
-  };
-}
+// ─── INVULN TICK (from core) ──────────────────────────────────────────
+export const createInvulnSystem = () => createInvulnerabilitySystem(C.Health);
 
 // ─── ARENA BOUNDS ─────────────────────────────────────────────────────
 export function createArenaBoundsSystem(arenaW: number, arenaH: number) {

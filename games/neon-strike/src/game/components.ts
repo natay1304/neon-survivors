@@ -1,6 +1,7 @@
 /** All component types for Neon Strike */
 
-import type { Blackboard } from '@survivors/core';
+// Re-export common component interfaces from core
+export type { Pos, Vel, Health, Collider, DamageFlash, BehaviorTreeData } from '@survivors/core';
 
 // Component type constants
 export const C = {
@@ -18,12 +19,6 @@ export const C = {
   BehaviorTree: 'bt',
   Explosion: 'explosion',
 } as const;
-
-// Component data interfaces
-export interface Pos { x: number; y: number; }
-export interface Vel { x: number; y: number; }
-export interface Health { current: number; max: number; invuln: number; }
-export interface Collider { radius: number; }
 
 export interface Visual {
   shape: 'circle' | 'triangle' | 'diamond' | 'square' | 'hexagon' | 'rocket' | 'star4' | 'spike' | 'crate' | 'barrel';
@@ -85,10 +80,6 @@ export interface Destructible {
   explosive: boolean;
 }
 
-export interface DamageFlash {
-  timer: number;
-}
-
 export interface Explosion {
   radius: number;
   maxRadius: number;
@@ -96,8 +87,4 @@ export interface Explosion {
   timer: number;
   owner: 'player' | 'enemy';
   hitEntities: Set<number>;
-}
-
-export interface BehaviorTreeData {
-  blackboard: Blackboard;
 }

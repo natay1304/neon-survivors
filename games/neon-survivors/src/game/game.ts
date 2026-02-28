@@ -1,8 +1,8 @@
 /** NeonSurvivorsScene — implements Scene, orchestrates all game systems */
 
-import { World, Camera2D, SpatialHash, ParticleSystem, FloatingTextManager, type Scene, type GameContext } from '@survivors/core';
+import { World, Camera2D, SpatialHash, ParticleSystem, FloatingTextManager, createDevCheatPanel, type CheatPanel, type Scene, type GameContext } from '@survivors/core';
 import { C, Pos, Vel, Health, Collider, Player, Visual } from './components';
-import { GAME_DURATION, STAT_UPGRADES, xpForLevel } from './config';
+import { GAME_DURATION, STAT_UPGRADES, WEAPONS, ENEMIES, xpForLevel } from './config';
 import { GameRenderer } from './renderer';
 import { UIManager, GameScreen } from './ui';
 import type { AdPlatform } from '@survivors/sdk';
@@ -19,6 +19,8 @@ import {
   createLightningSystem,
   createBonusSpawnSystem,
   createBonusPickupSystem,
+  createEnemyProjectileSystem,
+  spawnEnemy,
 } from './systems';
 import { drawJoystick } from './canvas-helpers';
 
@@ -50,6 +52,7 @@ export class NeonSurvivorsScene implements Scene {
   };
 
   private gameCtx: GameContext | null = null;
+  private cheats: CheatPanel | null = null;
 
   private onKeyDown = (e: KeyboardEvent) => {
     if (e.code === 'Escape') {
@@ -93,6 +96,8 @@ export class NeonSurvivorsScene implements Scene {
   exit(_ctx: GameContext): void {
     window.removeEventListener('keydown', this.onKeyDown);
     this.ui.destroy();
+    this.cheats?.destroy();
+    this.cheats = null;
     this.gameCtx = null;
   }
 
@@ -117,6 +122,16 @@ export class NeonSurvivorsScene implements Scene {
     }
 
     if (this.screen !== 'playing') return;
+
+    // Cheat: god mode
+    if (this.cheats?.isEnabled('godMode') && this.playerId >= 0) {
+      const hp = this.world.get<Health>(this.playerId, C.Health);
+      if (hp) { hp.current = hp.max; hp.invuln = 0.5; }
+    }
+
+    // Cheat: game speed multiplier
+    const speedMult = this.cheats?.getNumber('gameSpeed', 1) ?? 1;
+    dt *= speedMult;
 
     this.gameTime += dt;
     this.gameState.gameTime = this.gameTime;
@@ -250,6 +265,7 @@ export class NeonSurvivorsScene implements Scene {
     this.world.addSystem(createWeaponSystem(ctx.input, this.particles, this.floatingText, this.spatialHash, this.gameState));
     this.world.addSystem(createMovementSystem());
     this.world.addSystem(createProjectileSystem());
+    this.world.addSystem(createEnemyProjectileSystem());
     this.world.addSystem(createCollisionSystem(this.spatialHash, this.particles, this.floatingText));
     this.world.addSystem(createPickupSystem(this.particles, this.floatingText));
     this.world.addSystem(createDeathSystem(this.particles));
@@ -259,6 +275,24 @@ export class NeonSurvivorsScene implements Scene {
     this.world.addSystem(createBonusPickupSystem(this.particles, this.floatingText, this.spatialHash));
 
     this.camera.pos.set(0, 0);
+
+    // Dev cheats
+    if (!this.cheats) {
+      this.cheats = createDevCheatPanel({
+        onPause: () => {
+          if (this.screen === 'playing') {
+            this.screen = 'paused';
+          }
+        },
+        onResume: () => {
+          this.applyDeferredCheats();
+          if (this.screen === 'paused') {
+            this.screen = 'playing';
+          }
+        },
+      });
+      this.initCheats();
+    }
   }
 
   private restart(): void {
@@ -370,6 +404,178 @@ export class NeonSurvivorsScene implements Scene {
       );
       break;
     }
+  }
+
+  // ─── CHEAT SYSTEM ───────────────────────────────────────────────────
+
+  private initCheats(): void {
+    if (!this.cheats) return;
+
+    // — Player cheats —
+    this.cheats.addSection({
+      title: '🎮 Player',
+      items: [
+        { type: 'toggle', label: '🛡️ God Mode (invincible)', key: 'godMode', default: false },
+        { type: 'button', label: '❤️ Heal to Full', action: () => this.cheatHeal() },
+        { type: 'button', label: '⬆️ Level Up (+1)', action: () => this.cheatLevelUp() },
+        { type: 'button', label: '✨ Give 500 XP', action: () => this.cheatGiveXP(500) },
+        { type: 'slider', label: '💨 Player Speed', key: 'playerSpeed', min: 100, max: 2000, step: 50, default: 200 },
+        { type: 'slider', label: '🛡️ Armor', key: 'playerArmor', min: 0, max: 100, step: 1, default: 0 },
+      ],
+    });
+
+    // — Weapons cheats —
+    this.cheats.addSection({
+      title: '⚔️ Weapons',
+      items: [
+        { type: 'button', label: '🔓 Unlock All Weapons', action: () => this.cheatUnlockAllWeapons() },
+        { type: 'button', label: '⬆️ Max All Weapon Levels', action: () => this.cheatMaxWeapons() },
+        { type: 'slider', label: '💥 Damage Multiplier', key: 'damageMult', min: 1, max: 50, step: 1, default: 1 },
+        { type: 'slider', label: '⏱️ Cooldown Reduction %', key: 'cooldownPct', min: 0, max: 95, step: 5, default: 0 },
+      ],
+    });
+
+    // — Enemy spawn cheats —
+    const enemyOptions = Object.entries(ENEMIES).map(([key, def]) => ({
+      value: key,
+      label: `${def.name} (HP:${def.hp} DMG:${def.damage})`,
+    }));
+    this.cheats.addSection({
+      title: '👾 Enemy Spawning',
+      items: [
+        { type: 'select', label: 'Enemy Type', key: 'spawnEnemyType', options: enemyOptions, default: 'zombie' },
+        { type: 'number', label: 'Count', key: 'spawnEnemyCount', min: 1, max: 200, default: 10 },
+        { type: 'button', label: '👾 Spawn Enemies', action: () => this.cheatSpawnEnemies() },
+        { type: 'button', label: '💀 Kill All Enemies', action: () => this.cheatKillAllEnemies() },
+        { type: 'button', label: '🧹 Remove All Enemies', action: () => this.cheatRemoveAllEnemies() },
+      ],
+    });
+
+    // — Game state cheats —
+    this.cheats.addSection({
+      title: '🕐 Game State',
+      items: [
+        { type: 'slider', label: '⏩ Game Speed', key: 'gameSpeed', min: 0.1, max: 5, step: 0.1, default: 1 },
+        { type: 'slider', label: '🕐 Set Game Time (sec)', key: 'setGameTime', min: 0, max: GAME_DURATION, step: 10, default: 0 },
+        { type: 'button', label: '🕐 Apply Game Time', action: () => this.cheatSetGameTime() },
+        { type: 'button', label: '🏆 Instant Victory', action: () => this.cheatInstantVictory() },
+      ],
+    });
+  }
+
+  /** Apply deferred cheats that accumulate while panel is open */
+  private applyDeferredCheats(): void {
+    if (!this.cheats || this.playerId < 0) return;
+
+    // Player speed
+    const speed = this.cheats.getNumber('playerSpeed', 200);
+    const player = this.world.get<Player>(this.playerId, C.Player);
+    if (player) player.speed = speed;
+
+    // Armor
+    const armor = this.cheats.getNumber('playerArmor', 0);
+    if (player) player.armor = armor;
+
+    // Damage multiplier
+    const dmgMult = this.cheats.getNumber('damageMult', 1);
+    this.gameState.damageMult = dmgMult - 1; // gameState stores bonus, not total
+
+    // Cooldown
+    const cdPct = this.cheats.getNumber('cooldownPct', 0);
+    this.gameState.cooldownMult = cdPct / 100;
+  }
+
+  private cheatHeal(): void {
+    if (this.playerId < 0) return;
+    const hp = this.world.get<Health>(this.playerId, C.Health);
+    if (hp) {
+      hp.current = hp.max;
+      hp.invuln = 1;
+    }
+  }
+
+  private cheatLevelUp(): void {
+    if (this.playerId < 0) return;
+    const player = this.world.get<Player>(this.playerId, C.Player);
+    if (!player) return;
+    player.level++;
+    player.nextLevelXp = xpForLevel(player.level);
+    player.xp = 0;
+    const hp = this.world.get<Health>(this.playerId, C.Health);
+    if (hp) {
+      hp.max += 10;
+      hp.current = hp.max;
+    }
+    this.ui.generateUpgrades(player);
+    this.screen = 'levelup';
+  }
+
+  private cheatGiveXP(amount: number): void {
+    if (this.playerId < 0) return;
+    const player = this.world.get<Player>(this.playerId, C.Player);
+    if (player) player.xp += amount;
+  }
+
+  private cheatUnlockAllWeapons(): void {
+    if (this.playerId < 0) return;
+    const player = this.world.get<Player>(this.playerId, C.Player);
+    if (!player) return;
+    const owned = new Set(player.weapons.map(w => w.type));
+    for (const wType of Object.keys(WEAPONS)) {
+      if (!owned.has(wType)) {
+        player.weapons.push({ type: wType, level: 0, timer: 0 });
+      }
+    }
+  }
+
+  private cheatMaxWeapons(): void {
+    if (this.playerId < 0) return;
+    const player = this.world.get<Player>(this.playerId, C.Player);
+    if (!player) return;
+    for (const w of player.weapons) {
+      const def = WEAPONS[w.type];
+      if (def) w.level = def.levels.length - 1;
+    }
+  }
+
+  private cheatSpawnEnemies(): void {
+    if (this.playerId < 0 || !this.cheats) return;
+    const type = this.cheats.getString('spawnEnemyType', 'zombie');
+    const count = this.cheats.getNumber('spawnEnemyCount', 10);
+    const pPos = this.world.get<Pos>(this.playerId, C.Pos);
+    const player = this.world.get<Player>(this.playerId, C.Player);
+    if (!pPos) return;
+    for (let i = 0; i < count; i++) {
+      spawnEnemy(this.world, pPos, type, this.gameTime, player?.level ?? 1);
+    }
+  }
+
+  private cheatKillAllEnemies(): void {
+    const player = this.world.get<Player>(this.playerId, C.Player);
+    for (const e of this.world.query(C.Enemy, C.Health)) {
+      const hp = this.world.get<Health>(e, C.Health);
+      hp.current = 0;
+      if (player) player.kills++;
+    }
+  }
+
+  private cheatRemoveAllEnemies(): void {
+    for (const e of this.world.query(C.Enemy)) {
+      this.world.destroy(e);
+    }
+    this.world.flush();
+  }
+
+  private cheatSetGameTime(): void {
+    if (!this.cheats) return;
+    const time = this.cheats.getNumber('setGameTime', 0);
+    this.gameTime = time;
+    this.gameState.gameTime = time;
+  }
+
+  private cheatInstantVictory(): void {
+    this.gameTime = GAME_DURATION;
+    this.gameState.gameTime = GAME_DURATION;
   }
 
   private checkGameEnd(): void {

@@ -18,6 +18,7 @@ export const C = {
   Lightning: 'lightning',
   Bonus: 'bonus',
   BehaviorTree: 'bt',
+  EnemyProjectile: 'eproj',
 } as const;
 
 // Component data interfaces
@@ -111,4 +112,9 @@ export interface Bonus {
 
 export interface BehaviorTreeData {
   blackboard: Blackboard;
+}
+
+export interface EnemyProjectile {
+  damage: number;
+  lifetime: number;
 }
