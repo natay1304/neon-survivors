@@ -26,12 +26,20 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run build
+
+      - name: Build neon-survivors
+        run: npm run build:neon
         env:
           NODE_ENV: production
+
+      - name: Prepare deployment directory
+        run: |
+          mkdir -p dist
+          cp -r games/neon-survivors/dist/* dist/
+
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: games/neon-survivors/dist
+          path: dist
       - id: deployment
         uses: actions/deploy-pages@v4

@@ -15,3 +15,4 @@ export * from './game-context';
 export * from './behavior-tree';
 export * from './audio';
 export * from './network';
+export * from './gravity';
