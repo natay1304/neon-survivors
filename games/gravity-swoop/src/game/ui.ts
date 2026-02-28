@@ -6,6 +6,7 @@
  */
 
 import { LEVELS, SEED_COLOR, GOAL_COLOR, BIRD_BODY_COLOR } from './config';
+import { roundRect as coreRoundRect, drawButton as coreDrawButton } from '@survivors/core';
 
 export type Screen = 'menu' | 'levelSelect' | 'playing' | 'levelComplete' | 'paused';
 
@@ -362,38 +363,13 @@ export class UIManager {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function drawButton(
+// drawButton and roundRect are now imported from @survivors/core
+const drawButton = (
   ctx: CanvasRenderingContext2D,
   x: number, y: number, w: number, h: number,
   label: string, color: string,
-): void {
-  ctx.fillStyle = '#1a1a3e';
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  roundRect(ctx, x, y, w, h, 8);
-  ctx.fill();
-  ctx.stroke();
+): void => coreDrawButton(ctx, x, y, w, h, label, color, {
+  font: 'bold 18px system-ui, sans-serif',
+});
 
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 18px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(label, x + w / 2, y + h / 2);
-}
-
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number, w: number, h: number, r: number,
-): void {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
+const roundRect = coreRoundRect;

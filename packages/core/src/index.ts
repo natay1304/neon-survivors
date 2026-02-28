@@ -16,3 +16,7 @@ export * from './behavior-tree';
 export * from './audio';
 export * from './network';
 export * from './gravity';
+export * from './canvas-draw';
+export * from './collision';
+export * from './health';
+export * from './systems';

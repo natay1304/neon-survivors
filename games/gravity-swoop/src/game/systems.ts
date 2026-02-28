@@ -9,7 +9,7 @@
  *  5. trailSystem        — emit trail particles behind bird
  */
 
-import { type World, type SpatialHash, type ParticleSystem, applyPointGravity, getTangentialRelease } from '@survivors/core';
+import { type World, type SpatialHash, type ParticleSystem, applyPointGravity, getTangentialRelease, circleVsCircle, circleVsAABB } from '@survivors/core';
 import { C, type PosData, type VelData, type BirdData, type GravityPointData, type CollectibleData, type ColliderData } from './components';
 import {
   BIRD_MAX_SPEED, BIRD_DRAG,
@@ -203,19 +203,9 @@ function testCollision(
   ePos: PosData, eCol: ColliderData,
 ): boolean {
   if (eCol.shape === 'circle') {
-    const dx = bx - ePos.x;
-    const dy = by - ePos.y;
-    const combinedR = br + eCol.radius;
-    return dx * dx + dy * dy < combinedR * combinedR;
+    return circleVsCircle(bx, by, br, ePos.x, ePos.y, eCol.radius);
   }
-  // Rect collision (AABB vs circle)
-  const hw = eCol.width / 2;
-  const hh = eCol.height / 2;
-  const cx = Math.max(ePos.x - hw, Math.min(bx, ePos.x + hw));
-  const cy = Math.max(ePos.y - hh, Math.min(by, ePos.y + hh));
-  const dx = bx - cx;
-  const dy = by - cy;
-  return dx * dx + dy * dy < br * br;
+  return circleVsAABB(bx, by, br, ePos.x, ePos.y, eCol.width, eCol.height);
 }
 
 function killBird(state: GameState): void {

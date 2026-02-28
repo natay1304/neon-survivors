@@ -54,7 +54,9 @@ export interface GoalData {
   radius: number;
 }
 
-export type ColliderShape = 'circle' | 'rect';
+import type { ColliderShape } from '@survivors/core';
+
+export { ColliderShape };
 
 export interface ColliderData {
   shape: ColliderShape;

@@ -14,7 +14,7 @@
  * 10. Restore → HUD
  */
 
-import { type ParticleSystem } from '@survivors/core';
+import { drawParticles as coreDrawParticles } from '@survivors/core';
 import {
   C, type PosData, type VelData, type BirdData, type GravityPointData,
   type ObstacleData, type CollectibleData, type ColliderData,
@@ -164,7 +164,7 @@ export function renderGame(
   }
 
   // ---- 9. Particles ----
-  drawParticles(ctx, particles);
+  coreDrawParticles(ctx, particles);
 
   // Restore camera
   ctx.restore();
@@ -482,17 +482,4 @@ function drawGoal(ctx: CanvasRenderingContext2D, x: number, y: number, time: num
   ctx.globalAlpha = 1;
 }
 
-function drawParticles(ctx: CanvasRenderingContext2D, particles: ParticleSystem): void {
-  const active = particles.activeParticles;
-  for (let i = 0; i < active.length; i++) {
-    const p = active[i];
-    const t = p.life / p.maxLife;
-    ctx.globalAlpha = t;
-    ctx.fillStyle = p.color;
-    const sz = p.size + (p.sizeEnd - p.size) * (1 - t);
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, sz, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-}
+// drawParticles is now imported from @survivors/core as coreDrawParticles

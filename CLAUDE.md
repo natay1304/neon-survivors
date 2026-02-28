@@ -8,11 +8,13 @@ This is a **game development monorepo** for creating and publishing multiple bro
 
 ```
 ├── packages/
-│   ├── core/       # @survivors/core — game engine (ECS, rendering, audio, input, networking, AI)
+│   ├── core/       # @survivors/core — game engine (ECS, rendering, audio, input, networking, AI, collision, health, canvas drawing)
 │   ├── sdk/        # @survivors/sdk — ad platform integrations (CrazyGames, Yandex, Telegram)
 │   └── server/     # @survivors/server — multiplayer server (socket.io, rooms, state sync)
 ├── games/
-│   └── neon-survivors/  # Vampire Survivors-style bullet hell game
+│   ├── neon-survivors/  # Vampire Survivors-style bullet hell game
+│   ├── fall-vector/     # Gravity-manipulation platformer (Matter.js + Three.js)
+│   └── gravity-swoop/   # Gravity-slingshot puzzle game (Canvas 2D)
 ├── package.json         # npm workspaces root
 └── tsconfig.json        # shared TypeScript config
 ```
@@ -37,9 +39,15 @@ This is a **game development monorepo** for creating and publishing multiple bro
 
 ```bash
 # From repo root:
-npm install              # install all workspace dependencies
-npm run dev              # dev server for neon-survivors
-npm run build            # production build for neon-survivors
+npm install                # install all workspace dependencies
+npm run dev                # dev server for neon-survivors (default)
+npm run dev:neon           # dev server for neon-survivors
+npm run dev:fall-vector    # dev server for fall-vector
+npm run dev:gravity-swoop  # dev server for gravity-swoop
+npm run build              # production build for all games
+npm run build:neon         # production build for neon-survivors
+npm run build:fall-vector  # production build for fall-vector
+npm run build:gravity-swoop # production build for gravity-swoop
 
 # Server (packages/server):
 npm run dev --workspace=packages/server    # dev server with watch
@@ -66,7 +74,12 @@ The engine is modular — each system is a standalone module with minimal coupli
 - **AI** (`behavior-tree.ts`) — Behavior trees (sequence, selector, seek, flee, orbit).
 - **Networking** (`network.ts`) — Socket.io client with rooms, reconnect, latency tracking.
 - **Particles** (`particles.ts`) — Lightweight particle emitter.
-- **Collision** (`spatial-hash.ts`) — Spatial hash grid for O(n) broad-phase.
+- **Spatial Hash** (`spatial-hash.ts`) — Spatial hash grid for O(n) broad-phase.
+- **Collision** (`collision.ts`) — Circle-circle, circle-AABB, point-in-shape collision primitives.
+- **Health & Damage** (`health.ts`) — `applyDamage`, `applyKnockback`, `createInvulnerabilitySystem`.
+- **Common Systems** (`systems.ts`) — `createMovementSystem`, `createLifetimeSystem`, `computeSeparation`.
+- **Canvas Drawing** (`canvas-draw.ts`) — `drawParticles`, `drawFloatingText`, `applyCameraToContext`, `drawJoystick`, `roundRect`, `drawButton`.
+- **Gravity** (`gravity.ts`) — Point gravity, tangential release, orbit detection.
 - **Math** (`math.ts`) — Vec2 and math utilities.
 - **Utilities** (`utils.ts`) — ObjectPool, FloatingTextManager.
 
@@ -120,6 +133,7 @@ You are an expert in game development, 2D and 3D systems on the web, multiplayer
 
 ### Code Quality
 
+- Use @/core and @/sdk modules for shared functionality. Do not write custom implementations of features that belong in the core engine or SDK. If a required feature is missing, add it to the appropriate package instead of implementing it in the game code.
 - Write clean, readable code. Prefer clarity over cleverness.
 - Keep functions short and focused. Each function does one thing.
 - Use descriptive names. No abbreviations except well-known ones (e.g., `dt`, `ctx`, `pos`, `vel`).
@@ -173,9 +187,9 @@ When implementing multiplayer features:
 
 ### CI/CD and Multi-Project Pipelines
 
-- GitHub Actions deploys on push to `main`.
+- GitHub Actions deploys neon-survivors to GitHub Pages on push to `main`.
 - Build scripts must work per-workspace: `npm run build --workspace=games/<name>`.
-- When adding a new game, ensure the deploy workflow can be parameterized or extended to build and deploy it independently.
+- When adding a new game, add corresponding `build:<name>` and `dev:<name>` scripts to root `package.json`.
 - Keep build times fast — avoid unnecessary rebuilds of unchanged packages.
 
 ## Adding a New Game
@@ -185,3 +199,13 @@ When implementing multiplayer features:
 3. Add `vite.config.ts` with path aliases to `../../packages/core/src` and `../../packages/sdk/src`.
 4. Add `tsconfig.json` extending root config with appropriate paths.
 5. The game imports from `@survivors/core` and `@survivors/sdk` — no direct file path imports to packages.
+6. Add `build:<name>` and `dev:<name>` scripts to root `package.json`.
+7. Use shared core modules (`canvas-draw`, `collision`, `health`, `systems`) for common mechanics instead of reimplementing them.
+
+## Existing Games
+
+| Game | Genre | Renderer | Physics |
+|------|-------|----------|---------|
+| **neon-survivors** | Vampire Survivors-style bullet hell | Canvas 2D | Custom (ECS + spatial hash) |
+| **fall-vector** | Gravity-manipulation platformer | Three.js (2D ortho) | Matter.js |
+| **gravity-swoop** | Gravity-slingshot puzzle | Canvas 2D | Custom (point gravity) |
