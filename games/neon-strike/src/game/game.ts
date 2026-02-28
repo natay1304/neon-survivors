@@ -434,7 +434,7 @@ export class NeonStrikeScene implements Scene {
 
     if (this.cheats.isEnabled('infiniteAmmo')) {
       for (const w of player.weapons) {
-        if (w.ammo > 0) w.ammo = 999;
+        if (w.ammo > 0) w.ammo = -1;
       }
     }
   }
