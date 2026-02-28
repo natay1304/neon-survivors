@@ -8,8 +8,6 @@
     "noUnusedParameters": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "outDir": "dist",
     "sourceMap": true
-  },
-  "include": ["src"]
+  }
 }

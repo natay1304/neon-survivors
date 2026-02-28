@@ -54,6 +54,17 @@ export class InputManager {
     return this.isMobile ? this.aimId !== null : this.mouseMoved;
   }
 
+  /** Remove all event listeners to prevent leaks */
+  destroy(): void {
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
+    this.canvas.removeEventListener('touchstart', this.onTouchStart);
+    this.canvas.removeEventListener('touchmove', this.onTouchMove);
+    this.canvas.removeEventListener('touchend', this.onTouchEnd);
+    this.canvas.removeEventListener('mousedown', this.onMouseDown);
+    this.canvas.removeEventListener('mousemove', this.onMouseMove);
+  }
+
   /** Call once per frame after systems have read input */
   clearFrame(): void {
     this._anyKey = false;

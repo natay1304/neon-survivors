@@ -1,5 +1,5 @@
 import { Game } from './game/game';
-import { initPlatform } from './sdk';
+import { initPlatform } from '@survivors/sdk';
 
 async function main() {
   const platform = await initPlatform();

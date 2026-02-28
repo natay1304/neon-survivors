@@ -2,7 +2,7 @@
 
 import { Player } from './components';
 import { WEAPONS, STAT_UPGRADES } from './config';
-import { shuffle } from '../core/math';
+import { shuffle } from '@survivors/core';
 
 export type GameScreen = 'menu' | 'playing' | 'levelup' | 'gameover' | 'victory' | 'paused';
 

@@ -18,11 +18,22 @@ export class SpatialHash<T = number> {
     return (a + b) * (a + b + 1) / 2 + b;
   }
 
-  insert(item: T, x: number, y: number, radius: number): void {
+  private cellRange(x: number, y: number, radius: number): [number, number, number, number] | null {
+    if (!(isFinite(x) && isFinite(y) && isFinite(radius) && radius >= 0)) return null;
     const minCx = Math.floor((x - radius) / this.cellSize);
     const maxCx = Math.floor((x + radius) / this.cellSize);
     const minCy = Math.floor((y - radius) / this.cellSize);
     const maxCy = Math.floor((y + radius) / this.cellSize);
+    // Reject if any cell coord is non-finite or span is too large
+    if (!(isFinite(minCx) && isFinite(maxCx) && isFinite(minCy) && isFinite(maxCy))) return null;
+    if (maxCx - minCx > 50 || maxCy - minCy > 50) return null;
+    return [minCx, maxCx, minCy, maxCy];
+  }
+
+  insert(item: T, x: number, y: number, radius: number): void {
+    const range = this.cellRange(x, y, radius);
+    if (!range) return;
+    const [minCx, maxCx, minCy, maxCy] = range;
 
     const keys: number[] = [];
     for (let cx = minCx; cx <= maxCx; cx++) {
@@ -39,10 +50,9 @@ export class SpatialHash<T = number> {
 
   /** Query all items within radius of point. May contain duplicates — caller should dedup if needed. */
   query(x: number, y: number, radius: number): T[] {
-    const minCx = Math.floor((x - radius) / this.cellSize);
-    const maxCx = Math.floor((x + radius) / this.cellSize);
-    const minCy = Math.floor((y - radius) / this.cellSize);
-    const maxCy = Math.floor((y + radius) / this.cellSize);
+    const range = this.cellRange(x, y, radius);
+    if (!range) return [];
+    const [minCx, maxCx, minCy, maxCy] = range;
 
     const result: T[] = [];
     for (let cx = minCx; cx <= maxCx; cx++) {

@@ -9,6 +9,7 @@ export class World {
   private deferred: Entity[] = [];
   private systems: SystemFn[] = [];
   private alive = new Set<Entity>();
+  private queryCache = new Map<string, Entity[]>();
 
   spawn(): Entity {
     const id = this.nextId++;
@@ -20,6 +21,7 @@ export class World {
     let store = this.stores.get(component);
     if (!store) { store = new Map(); this.stores.set(component, store); }
     store.set(entity, data);
+    this.queryCache.clear();
     return this;
   }
 
@@ -37,6 +39,7 @@ export class World {
 
   remove(entity: Entity, component: string): void {
     this.stores.get(component)?.delete(entity);
+    this.queryCache.clear();
   }
 
   destroy(entity: Entity): void {
@@ -51,6 +54,10 @@ export class World {
   query(...components: string[]): Entity[] {
     if (components.length === 0) return [];
 
+    const key = components.length === 1 ? components[0] : [...components].sort().join(',');
+    const cached = this.queryCache.get(key);
+    if (cached) return cached;
+
     let smallest = components[0];
     let smallestSize = this.stores.get(components[0])?.size ?? 0;
     for (let i = 1; i < components.length; i++) {
@@ -59,7 +66,11 @@ export class World {
     }
 
     const store = this.stores.get(smallest);
-    if (!store) return [];
+    if (!store) {
+      const empty: Entity[] = [];
+      this.queryCache.set(key, empty);
+      return empty;
+    }
 
     const result: Entity[] = [];
     for (const entity of store.keys()) {
@@ -69,6 +80,7 @@ export class World {
       }
       if (valid) result.push(entity);
     }
+    this.queryCache.set(key, result);
     return result;
   }
 
@@ -110,5 +122,6 @@ export class World {
       this.alive.delete(entity);
     }
     this.deferred.length = 0;
+    this.queryCache.clear();
   }
 }

@@ -1,16 +1,11 @@
 /** Main Game class — orchestrates all systems, manages game state */
 
-import { World } from '../core/ecs';
-import { InputManager } from '../core/input';
-import { Camera } from '../core/camera';
-import { SpatialHash } from '../core/spatial-hash';
-import { ParticleSystem } from '../core/particles';
-import { FloatingTextManager } from '../core/utils';
+import { World, InputManager, Camera, SpatialHash, ParticleSystem, FloatingTextManager, DebugOverlay } from '@survivors/core';
 import { C, Pos, Vel, Health, Collider, Player, Visual } from './components';
 import { GAME_DURATION, STAT_UPGRADES, xpForLevel } from './config';
 import { GameRenderer } from './renderer';
 import { UIManager, GameScreen } from './ui';
-import type { AdPlatform } from '../sdk';
+import type { AdPlatform } from '@survivors/sdk';
 import {
   createInputSystem,
   createMovementSystem,
@@ -42,6 +37,7 @@ export class Game {
   private renderer!: GameRenderer;
   private ui: UIManager;
   private ads: AdPlatform;
+  private debug = new DebugOverlay();
 
   private screen: GameScreen = 'menu';
   private gameTime = 0;
@@ -58,6 +54,23 @@ export class Game {
     minibossSpawned: new Set<number>(),
   };
 
+  private onResize = () => this.resize();
+  private onKeyDown = (e: KeyboardEvent) => {
+    if (e.code === 'F3') {
+      e.preventDefault();
+      this.debug.enabled = !this.debug.enabled;
+    }
+    if (e.code === 'Escape') {
+      if (this.screen === 'playing') {
+        this.screen = 'paused';
+        this.ads.gameplayStop();
+      } else if (this.screen === 'paused') {
+        this.screen = 'playing';
+        this.ads.gameplayStart();
+      }
+    }
+  };
+
   constructor(canvas: HTMLCanvasElement, ads: AdPlatform) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
@@ -68,7 +81,7 @@ export class Game {
     this.spatialHash = new SpatialHash(64);
 
     this.resize();
-    window.addEventListener('resize', () => this.resize());
+    window.addEventListener('resize', this.onResize);
 
     this.ui = new UIManager(
       this.ctx,
@@ -80,17 +93,7 @@ export class Game {
 
     this.initGame();
 
-    window.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape') {
-        if (this.screen === 'playing') {
-          this.screen = 'paused';
-          this.ads.gameplayStop();
-        } else if (this.screen === 'paused') {
-          this.screen = 'playing';
-          this.ads.gameplayStart();
-        }
-      }
-    });
+    window.addEventListener('keydown', this.onKeyDown);
   }
 
   private resize(): void {
@@ -150,7 +153,7 @@ export class Game {
 
     // Register systems
     this.world.addSystem(createInputSystem(this.input));
-    this.world.addSystem(createEnemyAISystem());
+    this.world.addSystem(createEnemyAISystem(this.spatialHash));
     this.world.addSystem(createWeaponSystem(this.input, this.particles, this.floatingText, this.spatialHash, this.gameState));
     this.world.addSystem(createMovementSystem());
     this.world.addSystem(createProjectileSystem());
@@ -278,6 +281,7 @@ export class Game {
   private loop(currentTime: number): void {
     const frameTime = Math.min(currentTime - this.lastTime, MAX_FRAME_TIME);
     this.lastTime = currentTime;
+    this.debug.update(currentTime);
 
     if (this.screen === 'menu') {
       if (this.input.anyKey) {
@@ -370,9 +374,24 @@ export class Game {
       this.input.drawAimJoystick(this.ctx);
     }
 
+    // Debug overlay (screen space)
+    if (this.debug.enabled) {
+      this.debug.set('entities', this.world.count(C.Pos));
+      this.debug.set('enemies', this.world.count(C.Enemy));
+      this.debug.set('screen', this.screen);
+      this.debug.draw(this.ctx);
+    }
+
     this.ctx.restore();
 
     this.input.clearFrame();
     requestAnimationFrame((t) => this.loop(t));
+  }
+
+  destroy(): void {
+    window.removeEventListener('resize', this.onResize);
+    window.removeEventListener('keydown', this.onKeyDown);
+    this.input.destroy();
+    this.ui.destroy();
   }
 }
