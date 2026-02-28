@@ -19,6 +19,7 @@ export const C = {
   Bonus: 'bonus',
   BehaviorTree: 'bt',
   EnemyProjectile: 'eproj',
+  EnemySpin: 'espin',
 } as const;
 
 // Component data interfaces
@@ -62,6 +63,7 @@ export interface Player {
   armor: number;
   buffs: Buff[];
   statPicks: Record<string, number>;
+  firingMode: 'normal' | 'shotgun' | 'rapid';
 }
 
 export interface Enemy {
@@ -117,4 +119,11 @@ export interface BehaviorTreeData {
 export interface EnemyProjectile {
   damage: number;
   lifetime: number;
+}
+
+export interface EnemySpin {
+  speed: number;         // radians per second
+  direction: number;     // 1 or -1
+  flipTimer: number;     // countdown to next direction change
+  flipInterval: number;  // base seconds between direction changes
 }

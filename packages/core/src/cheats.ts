@@ -469,3 +469,61 @@ export function createDevCheatPanel(config: CheatPanelConfig): CheatPanel | null
   if (!isDev) return null;
   return new CheatPanel(config);
 }
+
+// ─── Common cheat section presets ────────────────────────────────────
+
+/** Game speed cheat section — slider + apply button */
+export function createGameSpeedSection(opts?: {
+  maxSpeed?: number;
+  onApplyTime?: () => void;
+  gameDuration?: number;
+}): CheatSection {
+  const items: CheatItem[] = [
+    { type: 'slider', label: '⏩ Game Speed', key: 'gameSpeed', min: 0.1, max: opts?.maxSpeed ?? 5, step: 0.1, default: 1 },
+  ];
+  if (opts?.gameDuration !== undefined) {
+    items.push(
+      { type: 'slider', label: '🕐 Set Game Time (sec)', key: 'setGameTime', min: 0, max: opts.gameDuration, step: 10, default: 0 },
+    );
+    if (opts.onApplyTime) {
+      items.push({ type: 'button', label: '🕐 Apply Game Time', action: opts.onApplyTime });
+    }
+  }
+  return { title: '🕐 Game Speed', items };
+}
+
+/** Player cheat section — god mode toggle + heal button */
+export function createPlayerCheatsSection(opts: {
+  onHeal?: () => void;
+  onLevelUp?: () => void;
+  onGiveXP?: () => void;
+  defaultSpeed?: number;
+  maxSpeed?: number;
+}): CheatSection {
+  const items: CheatItem[] = [
+    { type: 'toggle', label: '🛡️ God Mode (invincible)', key: 'godMode', default: false },
+  ];
+  if (opts.onHeal) items.push({ type: 'button', label: '❤️ Heal to Full', action: opts.onHeal });
+  if (opts.onLevelUp) items.push({ type: 'button', label: '⬆️ Level Up (+1)', action: opts.onLevelUp });
+  if (opts.onGiveXP) items.push({ type: 'button', label: '✨ Give 500 XP', action: opts.onGiveXP });
+  items.push(
+    { type: 'slider', label: '💨 Player Speed', key: 'playerSpeed', min: 100, max: opts.maxSpeed ?? 2000, step: 50, default: opts.defaultSpeed ?? 200 },
+    { type: 'slider', label: '🛡️ Armor', key: 'playerArmor', min: 0, max: 100, step: 1, default: 0 },
+  );
+  return { title: '🎮 Player', items };
+}
+
+/** Weapon cheat section — unlock all, max level, damage/cooldown sliders */
+export function createWeaponCheatsSection(opts: {
+  onUnlockAll?: () => void;
+  onMaxAll?: () => void;
+}): CheatSection {
+  const items: CheatItem[] = [];
+  if (opts.onUnlockAll) items.push({ type: 'button', label: '🔓 Unlock All Weapons', action: opts.onUnlockAll });
+  if (opts.onMaxAll) items.push({ type: 'button', label: '⬆️ Max All Weapon Levels', action: opts.onMaxAll });
+  items.push(
+    { type: 'slider', label: '💥 Damage Multiplier', key: 'damageMult', min: 1, max: 50, step: 1, default: 1 },
+    { type: 'slider', label: '⏱️ Cooldown Reduction %', key: 'cooldownPct', min: 0, max: 95, step: 5, default: 0 },
+  );
+  return { title: '⚔️ Weapons', items };
+}

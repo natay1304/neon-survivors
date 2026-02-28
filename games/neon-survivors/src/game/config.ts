@@ -107,14 +107,15 @@ export interface EnemyDef {
 }
 
 export const ENEMIES: Record<string, EnemyDef> = {
-  zombie:   { name: 'Zombie',   hp: 30,   speed: 55,  damage: 10, xp: 1, color: '#cc3333', size: 12, shape: 'spike',    unlockTime: 0,   weight: 10 },
-  bat:      { name: 'Bat',      hp: 15,   speed: 140, damage: 5,  xp: 1, color: '#9933cc', size: 9,  shape: 'diamond',  unlockTime: 30,  weight: 8 },
-  skeleton: { name: 'Skeleton', hp: 50,   speed: 70,  damage: 15, xp: 3, color: '#ccbb88', size: 13, shape: 'star4',    unlockTime: 120, weight: 6 },
-  ghost:    { name: 'Ghost',    hp: 25,   speed: 95,  damage: 8,  xp: 2, color: '#88bbff', size: 11, shape: 'triangle', unlockTime: 180, weight: 5 },
-  demon:    { name: 'Demon',    hp: 100,  speed: 65,  damage: 25, xp: 5, color: '#ff4400', size: 16, shape: 'spike',    unlockTime: 300, weight: 3 },
-  warlock:  { name: 'Warlock',  hp: 60,   speed: 50,  damage: 20, xp: 4, color: '#ff3366', size: 13, shape: 'hexagon',  unlockTime: 240, weight: 2 },
-  miniboss: { name: 'Miniboss', hp: 500,  speed: 45,  damage: 30, xp: 20, color: '#ffaa00', size: 24, shape: 'star4',   unlockTime: 120, weight: 0, isBoss: true },
-  boss:     { name: 'Boss',     hp: 2000, speed: 35,  damage: 50, xp: 100, color: '#ff00ff', size: 32, shape: 'spike',   unlockTime: 300, weight: 0, isBoss: true },
+  zombie:   { name: 'Zombie',   hp: 30,   speed: 45,  damage: 10, xp: 1, color: '#cc3333', size: 12, shape: 'spike',    unlockTime: 0,   weight: 10 },
+  bat:      { name: 'Bat',      hp: 15,   speed: 160, damage: 5,  xp: 1, color: '#9933cc', size: 9,  shape: 'diamond',  unlockTime: 30,  weight: 8 },
+  wisp:     { name: 'Wisp',     hp: 12,   speed: 200, damage: 7,  xp: 2, color: '#44ffcc', size: 7,  shape: 'triangle', unlockTime: 60,  weight: 6 },
+  skeleton: { name: 'Skeleton', hp: 50,   speed: 75,  damage: 15, xp: 3, color: '#ccbb88', size: 13, shape: 'star4',    unlockTime: 120, weight: 6 },
+  ghost:    { name: 'Ghost',    hp: 25,   speed: 120, damage: 8,  xp: 2, color: '#88bbff', size: 11, shape: 'triangle', unlockTime: 180, weight: 5 },
+  demon:    { name: 'Demon',    hp: 100,  speed: 35,  damage: 25, xp: 5, color: '#ff4400', size: 16, shape: 'spike',    unlockTime: 300, weight: 3 },
+  warlock:  { name: 'Warlock',  hp: 60,   speed: 55,  damage: 20, xp: 4, color: '#ff3366', size: 13, shape: 'hexagon',  unlockTime: 90,  weight: 2 },
+  miniboss: { name: 'Miniboss', hp: 500,  speed: 30,  damage: 30, xp: 20, color: '#ffaa00', size: 24, shape: 'star4',   unlockTime: 120, weight: 0, isBoss: true },
+  boss:     { name: 'Boss',     hp: 2000, speed: 25,  damage: 50, xp: 100, color: '#ff00ff', size: 32, shape: 'spike',   unlockTime: 300, weight: 0, isBoss: true },
 };
 
 export interface UpgradeDef {

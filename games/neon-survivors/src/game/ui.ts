@@ -22,6 +22,7 @@ export class UIManager {
   screen: GameScreen = 'menu';
   private onRevive: (() => void) | null = null;
   private onShare: ((text: string) => void) | null = null;
+  private onResume: (() => void) | null = null;
   private shareData: { kills: number; time: string; level: number; victory: boolean } | null = null;
 
   constructor(
@@ -175,6 +176,10 @@ export class UIManager {
     this.onShare = handler;
   }
 
+  setResumeHandler(handler: () => void): void {
+    this.onResume = handler;
+  }
+
   drawGameOver(w: number, h: number, player: Player, gameTime: number, victory: boolean): void {
     const ctx = this.ctx;
 
@@ -278,24 +283,40 @@ export class UIManager {
     ctx.fillStyle = '#00ffff';
     ctx.font = `bold ${mobile ? 32 : 42}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('PAUSED', w / 2, h / 2 - 10);
+    ctx.fillText('PAUSED', w / 2, h / 2 - 30);
     ctx.restore();
 
     ctx.textAlign = 'center';
     ctx.font = `${mobile ? 14 : 16}px monospace`;
     ctx.fillStyle = '#8888aa';
-    ctx.fillText(mobile ? 'Tap ⏸ to resume' : 'ESC or click ⏸ to resume', w / 2, h / 2 + 30);
+    ctx.fillText(mobile ? 'Tap ⏸ to resume' : 'ESC or click ⏸ to resume', w / 2, h / 2 + 10);
 
     if (!mobile) {
       ctx.font = '13px monospace';
       ctx.fillStyle = '#555566';
-      ctx.fillText('MOUSE = aim  |  WASD = move', w / 2, h / 2 + 65);
+      ctx.fillText('MOUSE = aim  |  WASD = move', w / 2, h / 2 + 40);
     }
+
+    // Resume button
+    const resBtnW = 180, resBtnH = 38;
+    const resBtnX = w / 2 - resBtnW / 2;
+    const resBtnY = h / 2 + (mobile ? 50 : 65);
+    const resHover = this.isHovering(resBtnX, resBtnY, resBtnW, resBtnH);
+
+    ctx.fillStyle = resHover ? '#1a2a2a' : '#0a1a1a';
+    ctx.fillRect(resBtnX, resBtnY, resBtnW, resBtnH);
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = resHover ? 2 : 1;
+    ctx.strokeRect(resBtnX, resBtnY, resBtnW, resBtnH);
+
+    ctx.fillStyle = '#00ffff';
+    ctx.font = `bold ${mobile ? 14 : 15}px monospace`;
+    ctx.fillText('RESUME', w / 2, resBtnY + 25);
 
     // Restart button
     const btnW = 180, btnH = 38;
     const btnX = w / 2 - btnW / 2;
-    const btnY = h / 2 + (mobile ? 70 : 95);
+    const btnY = resBtnY + resBtnH + 12;
     const hover = this.isHovering(btnX, btnY, btnW, btnH);
 
     ctx.fillStyle = hover ? '#2a1a1a' : '#1a1010';
@@ -357,6 +378,26 @@ export class UIManager {
       });
     }
 
+    // Firing mode upgrades (only if player is still on normal mode)
+    if (player.firingMode === 'normal') {
+      options.push({
+        id: 'mode_shotgun',
+        name: 'Shotgun Mode',
+        description: 'Wide spread, 5 bullets per shot, less damage and range',
+        icon: '💥',
+        color: '#ff8844',
+        action: () => { player.firingMode = 'shotgun'; },
+      });
+      options.push({
+        id: 'mode_rapid',
+        name: 'Rapid Fire',
+        description: '2x fire rate, faster bullets, smaller size and less damage',
+        icon: '⚡',
+        color: '#ffdd00',
+        action: () => { player.firingMode = 'rapid'; },
+      });
+    }
+
     // Pick 3 random
     shuffle(options);
     this.currentUpgrades = options.slice(0, 3);
@@ -414,12 +455,23 @@ export class UIManager {
       }
     }
 
-    // Pause restart button click
+    // Pause screen button clicks (Resume + Restart)
     if (this.screen === 'paused') {
       const mobile = w < 600;
+
+      // Resume button
+      const resBtnW = 180, resBtnH = 38;
+      const resBtnX = w / 2 - resBtnW / 2;
+      const resBtnY = h / 2 + (mobile ? 50 : 65);
+      if (x >= resBtnX && x <= resBtnX + resBtnW && y >= resBtnY && y <= resBtnY + resBtnH) {
+        if (this.onResume) this.onResume();
+        return;
+      }
+
+      // Restart button
       const btnW = 180, btnH = 38;
       const btnX = w / 2 - btnW / 2;
-      const btnY = h / 2 + (mobile ? 70 : 95);
+      const btnY = resBtnY + resBtnH + 12;
       if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
         this.onRestart();
         return;

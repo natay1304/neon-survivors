@@ -1,6 +1,6 @@
 /** NeonSurvivorsScene — implements Scene, orchestrates all game systems */
 
-import { World, Camera2D, SpatialHash, ParticleSystem, FloatingTextManager, createDevCheatPanel, type CheatPanel, type Scene, type GameContext } from '@survivors/core';
+import { World, Camera2D, SpatialHash, ParticleSystem, FloatingTextManager, createDevCheatPanel, createPlayerCheatsSection, createWeaponCheatsSection, createGameSpeedSection, type CheatPanel, type Scene, type GameContext } from '@survivors/core';
 import { C, Pos, Vel, Health, Collider, Player, Visual } from './components';
 import { GAME_DURATION, STAT_UPGRADES, WEAPONS, ENEMIES, xpForLevel } from './config';
 import { GameRenderer } from './renderer';
@@ -20,6 +20,7 @@ import {
   createBonusSpawnSystem,
   createBonusPickupSystem,
   createEnemyProjectileSystem,
+  createEnemySpinSystem,
   spawnEnemy,
 } from './systems';
 import { drawJoystick } from './canvas-helpers';
@@ -49,6 +50,7 @@ export class NeonSurvivorsScene implements Scene {
     gameTime: 0,
     bossSpawned: new Set<number>(),
     minibossSpawned: new Set<number>(),
+    enemySpinEnabled: true,
   };
 
   private gameCtx: GameContext | null = null;
@@ -79,6 +81,7 @@ export class NeonSurvivorsScene implements Scene {
     );
     this.ui.setReviveHandler(() => this.revive());
     this.ui.setShareHandler((text) => this.shareScore(text));
+    this.ui.setResumeHandler(() => this.resumeGame());
     this.ui.enableTracking();
   }
 
@@ -249,6 +252,7 @@ export class NeonSurvivorsScene implements Scene {
       armor: 0,
       buffs: [],
       statPicks: {},
+      firingMode: 'normal',
     } as Player);
     this.world.add(this.playerId, C.Visual, {
       shape: 'rocket',
@@ -266,6 +270,7 @@ export class NeonSurvivorsScene implements Scene {
     this.world.addSystem(createMovementSystem());
     this.world.addSystem(createProjectileSystem());
     this.world.addSystem(createEnemyProjectileSystem());
+    this.world.addSystem(createEnemySpinSystem());
     this.world.addSystem(createCollisionSystem(this.spatialHash, this.particles, this.floatingText));
     this.world.addSystem(createPickupSystem(this.particles, this.floatingText));
     this.world.addSystem(createDeathSystem(this.particles));
@@ -303,6 +308,13 @@ export class NeonSurvivorsScene implements Scene {
         this.ads.gameplayStart();
       }
     });
+  }
+
+  private resumeGame(): void {
+    if (this.screen === 'paused') {
+      this.screen = 'playing';
+      this.ads.gameplayStart();
+    }
   }
 
   private revive(): void {
@@ -411,31 +423,20 @@ export class NeonSurvivorsScene implements Scene {
   private initCheats(): void {
     if (!this.cheats) return;
 
-    // — Player cheats —
-    this.cheats.addSection({
-      title: '🎮 Player',
-      items: [
-        { type: 'toggle', label: '🛡️ God Mode (invincible)', key: 'godMode', default: false },
-        { type: 'button', label: '❤️ Heal to Full', action: () => this.cheatHeal() },
-        { type: 'button', label: '⬆️ Level Up (+1)', action: () => this.cheatLevelUp() },
-        { type: 'button', label: '✨ Give 500 XP', action: () => this.cheatGiveXP(500) },
-        { type: 'slider', label: '💨 Player Speed', key: 'playerSpeed', min: 100, max: 2000, step: 50, default: 200 },
-        { type: 'slider', label: '🛡️ Armor', key: 'playerArmor', min: 0, max: 100, step: 1, default: 0 },
-      ],
-    });
+    // — Player cheats (from core) —
+    this.cheats.addSection(createPlayerCheatsSection({
+      onHeal: () => this.cheatHeal(),
+      onLevelUp: () => this.cheatLevelUp(),
+      onGiveXP: () => this.cheatGiveXP(500),
+    }));
 
-    // — Weapons cheats —
-    this.cheats.addSection({
-      title: '⚔️ Weapons',
-      items: [
-        { type: 'button', label: '🔓 Unlock All Weapons', action: () => this.cheatUnlockAllWeapons() },
-        { type: 'button', label: '⬆️ Max All Weapon Levels', action: () => this.cheatMaxWeapons() },
-        { type: 'slider', label: '💥 Damage Multiplier', key: 'damageMult', min: 1, max: 50, step: 1, default: 1 },
-        { type: 'slider', label: '⏱️ Cooldown Reduction %', key: 'cooldownPct', min: 0, max: 95, step: 5, default: 0 },
-      ],
-    });
+    // — Weapons cheats (from core) —
+    this.cheats.addSection(createWeaponCheatsSection({
+      onUnlockAll: () => this.cheatUnlockAllWeapons(),
+      onMaxAll: () => this.cheatMaxWeapons(),
+    }));
 
-    // — Enemy spawn cheats —
+    // — Enemy spawn cheats (game-specific) —
     const enemyOptions = Object.entries(ENEMIES).map(([key, def]) => ({
       value: key,
       label: `${def.name} (HP:${def.hp} DMG:${def.damage})`,
@@ -451,14 +452,24 @@ export class NeonSurvivorsScene implements Scene {
       ],
     });
 
-    // — Game state cheats —
+    // — Game state cheats (from core + game-specific) —
+    this.cheats.addSection(createGameSpeedSection({
+      gameDuration: GAME_DURATION,
+      onApplyTime: () => this.cheatSetGameTime(),
+    }));
+    // Victory button (game-specific, added to last section)
     this.cheats.addSection({
-      title: '🕐 Game State',
+      title: '🏆 Win Conditions',
       items: [
-        { type: 'slider', label: '⏩ Game Speed', key: 'gameSpeed', min: 0.1, max: 5, step: 0.1, default: 1 },
-        { type: 'slider', label: '🕐 Set Game Time (sec)', key: 'setGameTime', min: 0, max: GAME_DURATION, step: 10, default: 0 },
-        { type: 'button', label: '🕐 Apply Game Time', action: () => this.cheatSetGameTime() },
         { type: 'button', label: '🏆 Instant Victory', action: () => this.cheatInstantVictory() },
+      ],
+    });
+
+    // — Settings —
+    this.cheats.addSection({
+      title: '⚙ Settings',
+      items: [
+        { type: 'toggle', label: '🌀 Enemy Spin', key: 'enemySpin', default: true },
       ],
     });
   }
@@ -483,6 +494,16 @@ export class NeonSurvivorsScene implements Scene {
     // Cooldown
     const cdPct = this.cheats.getNumber('cooldownPct', 0);
     this.gameState.cooldownMult = cdPct / 100;
+
+    // Enemy spin toggle
+    const spinEnabled = this.cheats.isEnabled('enemySpin');
+    this.gameState.enemySpinEnabled = spinEnabled;
+    // Remove spin from existing enemies if disabled
+    if (!spinEnabled) {
+      for (const e of this.world.query(C.Enemy, C.EnemySpin)) {
+        this.world.remove(e, C.EnemySpin);
+      }
+    }
   }
 
   private cheatHeal(): void {

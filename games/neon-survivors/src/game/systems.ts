@@ -1,7 +1,7 @@
 /** All game systems — pure functions operating on the ECS world */
 
 import { Vec2, randomAngle, randomRange, clamp, World, Entity, InputManager, SpatialHash, ParticleSystem, FloatingTextManager, Blackboard, type BTContext } from '@survivors/core';
-import { C, Pos, Vel, Health, Collider, Player, Enemy, Projectile, XPGem, Visual, LightningData, Bonus, type BehaviorTreeData, type EnemyProjectile } from './components';
+import { C, Pos, Vel, Health, Collider, Player, Enemy, Projectile, XPGem, Visual, LightningData, Bonus, type BehaviorTreeData, type EnemyProjectile, type EnemySpin } from './components';
 import { WEAPONS, ENEMIES, ENEMY_SPAWN_DISTANCE, MAX_ENEMIES, GAME_DURATION, BOSS_TIMES, MINIBOSS_TIMES } from './config';
 import { ENEMY_TREES, simpleLODTree } from './enemy-behaviors';
 
@@ -118,8 +118,8 @@ export function createBTEnemySystem(spatialHash: SpatialHash<Entity>) {
           world.add(ep, C.EnemyProjectile, { damage: projDmg, lifetime: 3.5 } as EnemyProjectile);
           world.add(ep, C.Collider, { radius: 6 });
           world.add(ep, C.Visual, {
-            shape: 'diamond', color: '#ff3366', size: 7,
-            glow: '#cc0033', glowSize: 12, rotation: 0,
+            shape: 'diamond', color: '#ffdd44', size: 7,
+            rotation: 0,
           } as Visual);
         }
       }
@@ -226,22 +226,47 @@ export function createWeaponSystem(
             const aimX = input.isAiming ? input.aimDir.x : player.lastDirX;
             const aimY = input.isAiming ? input.aimDir.y : player.lastDirY;
             const baseAngle = Math.atan2(aimY, aimX);
-            const spread = 0.3;
-            for (let i = 0; i < lvl.count; i++) {
-              const angle = baseAngle + (i - (lvl.count - 1) / 2) * spread;
+
+            // Firing mode overrides
+            const mode = player.firingMode;
+            let count = lvl.count;
+            let spread = 0.3;
+            let dmgMult = 1;
+            let sizeMult = 1;
+            let speedMult = 1;
+            let pierceMod = 0;
+            let lifetimeMult = 1;
+
+            if (mode === 'shotgun') {
+              count = Math.max(count, 5);
+              spread = 0.7;
+              dmgMult = 0.6;
+              speedMult = 0.85;
+              lifetimeMult = 0.6;
+            } else if (mode === 'rapid') {
+              slot.timer *= 0.5;
+              sizeMult = 0.6;
+              dmgMult = 0.7;
+              speedMult = 1.2;
+              pierceMod = 0;
+            }
+
+            for (let i = 0; i < count; i++) {
+              const angle = baseAngle + (i - (count - 1) / 2) * spread;
               const proj = world.spawn();
+              const projSize = lvl.size * sizeMult;
               world.add(proj, C.Pos, { x: pPos.x, y: pPos.y });
-              world.add(proj, C.Vel, { x: Math.cos(angle) * lvl.speed, y: Math.sin(angle) * lvl.speed });
+              world.add(proj, C.Vel, { x: Math.cos(angle) * lvl.speed * speedMult, y: Math.sin(angle) * lvl.speed * speedMult });
               world.add(proj, C.Projectile, {
-                damage: lvl.damage * (1 + gameState.damageMult),
-                lifetime: 2.0,
-                pierce: lvl.pierce,
+                damage: lvl.damage * (1 + gameState.damageMult) * dmgMult,
+                lifetime: 2.0 * lifetimeMult,
+                pierce: lvl.pierce + pierceMod,
                 weaponType: slot.type,
                 hitEntities: new Set(),
-                size: lvl.size,
+                size: projSize,
               } as Projectile);
-              world.add(proj, C.Collider, { radius: lvl.size });
-              world.add(proj, C.Visual, { shape: 'circle', color: wDef.color, size: lvl.size, glow: wDef.glow, glowSize: 12 } as Visual);
+              world.add(proj, C.Collider, { radius: projSize });
+              world.add(proj, C.Visual, { shape: 'circle', color: wDef.color, size: projSize, glow: wDef.glow, glowSize: 12 * sizeMult } as Visual);
             }
             break;
           }
@@ -447,8 +472,8 @@ export function createCollisionSystem(
           const dmg = Math.max(1, Math.round(eProj.damage - playerData.armor));
           playerHp.current = Math.max(0, playerHp.current - dmg);
           playerHp.invuln = 0.5;
-          floatingText.add(playerPos.x, playerPos.y - 20, `-${dmg}`, '#ff3366', 0.8, 20);
-          particles.emit(playerPos.x, playerPos.y, 6, { color: '#ff3366', speed: 100, life: 0.3 });
+          floatingText.add(playerPos.x, playerPos.y - 20, `-${dmg}`, '#ffdd44', 0.8, 20);
+          particles.emit(playerPos.x, playerPos.y, 6, { color: '#ffaa00', speed: 100, life: 0.3 });
         }
         world.destroy(ep);
       }
@@ -481,16 +506,42 @@ export function createCollisionSystem(
 
 // ─── ENEMY PROJECTILE SYSTEM ─────────────────────────────────────────
 export function createEnemyProjectileSystem() {
+  let elapsed = 0;
   return (world: World, dt: number) => {
+    elapsed += dt;
     for (const e of world.query(C.EnemyProjectile, C.Pos)) {
       const eProj = world.get<EnemyProjectile>(e, C.EnemyProjectile);
       eProj.lifetime -= dt;
       if (eProj.lifetime <= 0) {
         world.destroy(e);
+        continue;
       }
       // Spin the visual for flair
       const vis = world.maybe<Visual>(e, C.Visual);
-      if (vis) vis.rotation = (vis.rotation ?? 0) + dt * 8;
+      if (vis) {
+        vis.rotation = (vis.rotation ?? 0) + dt * 8;
+        vis.size = 7 + Math.sin(elapsed * 12) * 2;
+      }
+    }
+  };
+}
+
+// ─── ENEMY SPIN SYSTEM ──────────────────────────────────────────────
+export function createEnemySpinSystem() {
+  return (world: World, dt: number) => {
+    for (const e of world.query(C.EnemySpin, C.Visual)) {
+      const spin = world.get<EnemySpin>(e, C.EnemySpin);
+      const vis = world.get<Visual>(e, C.Visual);
+
+      // Update rotation
+      vis.rotation = (vis.rotation ?? 0) + spin.speed * spin.direction * dt;
+
+      // Countdown to direction flip
+      spin.flipTimer -= dt;
+      if (spin.flipTimer <= 0) {
+        spin.direction *= -1;
+        spin.flipTimer = spin.flipInterval * (0.7 + Math.random() * 0.6);
+      }
     }
   };
 }
@@ -538,7 +589,7 @@ export function createPickupSystem(particles: ParticleSystem, floatingText: Floa
 
 // ─── WAVE SYSTEM ─────────────────────────────────────────────────────
 export function createWaveSystem(
-  gameState: { gameTime: number; bossSpawned: Set<number>; minibossSpawned: Set<number> }
+  gameState: { gameTime: number; bossSpawned: Set<number>; minibossSpawned: Set<number>; enemySpinEnabled?: boolean }
 ) {
   let spawnAccumulator = 0;
 
@@ -549,18 +600,19 @@ export function createWaveSystem(
     const playerLevel = world.get<Player>(players[0], C.Player).level;
     const time = gameState.gameTime;
     const enemyCount = world.count(C.Enemy);
+    const spin = gameState.enemySpinEnabled !== false;
 
     // Boss spawns
     for (const bt of BOSS_TIMES) {
       if (time >= bt && !gameState.bossSpawned.has(bt)) {
         gameState.bossSpawned.add(bt);
-        spawnEnemy(world, pPos, 'boss', time, playerLevel);
+        spawnEnemy(world, pPos, 'boss', time, playerLevel, spin);
       }
     }
     for (const mt of MINIBOSS_TIMES) {
       if (time >= mt && !gameState.minibossSpawned.has(mt)) {
         gameState.minibossSpawned.add(mt);
-        spawnEnemy(world, pPos, 'miniboss', time, playerLevel);
+        spawnEnemy(world, pPos, 'miniboss', time, playerLevel, spin);
       }
     }
 
@@ -588,12 +640,12 @@ export function createWaveSystem(
         if (roll <= 0) { chosenType = type; break; }
       }
 
-      spawnEnemy(world, pPos, chosenType, time, playerLevel);
+      spawnEnemy(world, pPos, chosenType, time, playerLevel, spin);
     }
   };
 }
 
-export function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime: number, playerLevel: number = 1): void {
+export function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime: number, playerLevel: number = 1, enableSpin = true): void {
   const def = ENEMIES[type];
   if (!def) return;
 
@@ -631,6 +683,16 @@ export function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime:
     rotation: 0,
   } as Visual);
   world.add(e, C.BehaviorTree, { blackboard: new Blackboard() } as BehaviorTreeData);
+
+  // Randomly assign spin to ~40% of non-boss enemies
+  if (enableSpin && !def.isBoss && Math.random() < 0.4) {
+    world.add(e, C.EnemySpin, {
+      speed: 2 + Math.random() * 4,
+      direction: Math.random() < 0.5 ? 1 : -1,
+      flipTimer: 2 + Math.random() * 4,
+      flipInterval: 3 + Math.random() * 3,
+    } as EnemySpin);
+  }
 }
 
 // ─── DEATH SYSTEM ────────────────────────────────────────────────────

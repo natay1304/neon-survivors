@@ -47,17 +47,60 @@ function hpBelow(fraction: number): (ctx: BTContext) => boolean {
 /**
  * Cooldown whose interval shrinks with rising `__aggression` (set by BT system).
  * At aggression=1 the interval equals baseSec; at aggression=2 it is halved, etc.
+ * When the child node returns 'running', subsequent ticks bypass the cooldown
+ * check and keep ticking the child until it resolves.
  */
 function aggroCooldown(key: string, baseSec: number, node: BehaviorNode): BehaviorNode {
   const bbKey = `__acd_${key}`;
+  const runKey = `__acd_run_${key}`;
   return (ctx: BTContext): BehaviorStatus => {
+    // Child was previously running — keep ticking it without re-checking cooldown
+    if (ctx.blackboard.get<boolean>(runKey, false)) {
+      const result = node(ctx);
+      if (result !== 'running') ctx.blackboard.delete(runKey);
+      return result;
+    }
+
     const last = ctx.blackboard.get<number>(bbKey, -Infinity);
     const now = ctx.blackboard.get<number>('__time', 0);
     const aggro = ctx.blackboard.get<number>('__aggression', 1);
     const seconds = baseSec / Math.max(1, aggro);
     if (now - last < seconds) return 'failure';
     ctx.blackboard.set(bbKey, now);
-    return node(ctx);
+    const result = node(ctx);
+    if (result === 'running') ctx.blackboard.set(runKey, true);
+    return result;
+  };
+}
+
+// ─── Random-interval cooldown ──────────────────────────────────────────
+/**
+ * Like aggroCooldown but picks a random interval between minSec and maxSec
+ * each time it fires. Scales with aggression like aggroCooldown.
+ */
+function randomCooldown(key: string, minSec: number, maxSec: number, node: BehaviorNode): BehaviorNode {
+  const bbKey = `__rcd_${key}`;
+  const intKey = `__rcd_int_${key}`;
+  const runKey = `__rcd_run_${key}`;
+  return (ctx: BTContext): BehaviorStatus => {
+    if (ctx.blackboard.get<boolean>(runKey, false)) {
+      const result = node(ctx);
+      if (result !== 'running') ctx.blackboard.delete(runKey);
+      return result;
+    }
+
+    const last = ctx.blackboard.get<number>(bbKey, -Infinity);
+    const now = ctx.blackboard.get<number>('__time', 0);
+    const aggro = ctx.blackboard.get<number>('__aggression', 1);
+    const interval = ctx.blackboard.get<number>(intKey, minSec + Math.random() * (maxSec - minSec));
+    const seconds = interval / Math.max(1, aggro);
+    if (now - last < seconds) return 'failure';
+    ctx.blackboard.set(bbKey, now);
+    // Pick new random interval for next shot
+    ctx.blackboard.set(intKey, minSec + Math.random() * (maxSec - minSec));
+    const result = node(ctx);
+    if (result === 'running') ctx.blackboard.set(runKey, true);
+    return result;
   };
 }
 
@@ -82,6 +125,31 @@ function shoot(): BehaviorNode {
 // Weaves drunkenly as it advances. Relentless, inevitable approach.
 // Amplitude/frequency give a memorable shambling cadence.
 export const zombieTree: BehaviorNode = zigzagSeek(playerTarget, 0.6, 3.5);
+
+// ─── Wisp — Erratic darting ─────────────────────────────────────────
+// Tiny, lightning-fast enemy that zigzags wildly and dashes through
+// the player with sharp, unpredictable bursts. Glass cannon.
+export const wispTree: BehaviorNode = selector(
+  // Close: rapid dash through player
+  sequence(
+    checkDistance(playerTarget, '<', 120),
+    aggroCooldown('wisp_dash', 1.2, dash(6.0, 0.15, 'wisp_dash')),
+  ),
+  // Medium: aggressive high-frequency zigzag with direction flips
+  sequence(
+    checkDistance(playerTarget, '<', 350),
+    selector(
+      // Periodically juke sideways with a short perpendicular dash
+      aggroCooldown('wisp_juke', 0.8, sequence(
+        wait(0.05, 'wisp_juke_wind'),
+        dash(5.0, 0.1, 'wisp_juke'),
+      )),
+      zigzagSeek(playerTarget, 1.0, 10.0),
+    ),
+  ),
+  // Far: fast erratic approach
+  zigzagSeek(playerTarget, 0.9, 8.0),
+);
 
 // ─── Bat — Erratic swooping ──────────────────────────────────────────
 // Fast figure-8 orbits at close range with sudden dive-bomb attacks.
@@ -187,9 +255,14 @@ export const demonTree: BehaviorNode = selector(
 );
 
 // ─── Warlock — Ranged caster ──────────────────────────────────────────
-// Maintains distance, orbits the player while launching projectiles.
-// Blinks away if the player gets too close. Rare but dangerous.
+// Maintains distance, orbits the player while constantly launching projectiles.
+// Blinks away if the player gets too close. Shoots at any distance.
 export const warlockTree: BehaviorNode = selector(
+  // Always try to shoot (any distance) with random 1.0-1.5s cooldown
+  randomCooldown('warlock_shot', 1.0, 1.5, sequence(
+    wait(0.15, 'warlock_cast'),
+    shoot(),
+  )),
   // Too close: blink away (fast backwards dash)
   sequence(
     checkDistance(playerTarget, '<', 150),
@@ -198,19 +271,11 @@ export const warlockTree: BehaviorNode = selector(
     )),
     flee(playerTarget),
   ),
-  // Optimal range: orbit and shoot periodically
+  // Optimal range: orbit
   sequence(
     checkDistance(playerTarget, '<', 450),
     checkDistance(playerTarget, '>', 150),
-    selector(
-      // Fire projectile
-      aggroCooldown('warlock_shot', 2.0, sequence(
-        wait(0.3, 'warlock_cast'),
-        shoot(),
-      )),
-      // Orbit while shot is on cooldown
-      orbit(playerTarget, 300, 1.0),
-    ),
+    orbit(playerTarget, 300, 1.0),
   ),
   // Too far: close distance
   seek(playerTarget),
@@ -272,6 +337,7 @@ export const simpleLODTree: BehaviorNode = seek(playerTarget);
 /** Maps enemy type string to its behavior tree. */
 export const ENEMY_TREES: Record<string, BehaviorNode> = {
   zombie:   zombieTree,
+  wisp:     wispTree,
   bat:      batTree,
   skeleton: skeletonTree,
   ghost:    ghostTree,
