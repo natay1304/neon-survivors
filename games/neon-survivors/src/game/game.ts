@@ -1,6 +1,6 @@
-/** Main Game class — orchestrates all systems, manages game state */
+/** NeonSurvivorsScene — implements Scene, orchestrates all game systems */
 
-import { World, InputManager, Camera, SpatialHash, ParticleSystem, FloatingTextManager, DebugOverlay } from '@survivors/core';
+import { World, Camera2D, SpatialHash, ParticleSystem, FloatingTextManager, type Scene, type GameContext } from '@survivors/core';
 import { C, Pos, Vel, Health, Collider, Player, Visual } from './components';
 import { GAME_DURATION, STAT_UPGRADES, xpForLevel } from './config';
 import { GameRenderer } from './renderer';
@@ -9,7 +9,7 @@ import type { AdPlatform } from '@survivors/sdk';
 import {
   createInputSystem,
   createMovementSystem,
-  createEnemyAISystem,
+  createBTEnemySystem,
   createWeaponSystem,
   createProjectileSystem,
   createCollisionSystem,
@@ -20,29 +20,24 @@ import {
   createBonusSpawnSystem,
   createBonusPickupSystem,
 } from './systems';
+import { drawJoystick } from './canvas-helpers';
 
-const TICK_RATE = 60;
-const TICK_DURATION = 1000 / TICK_RATE;
-const MAX_FRAME_TIME = 100; // prevent spiral of death
+export class NeonSurvivorsScene implements Scene {
+  readonly name = 'neon-survivors';
 
-export class Game {
   private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
+  private ctx2d: CanvasRenderingContext2D;
   private world!: World;
-  private input: InputManager;
-  private camera: Camera;
+  private camera!: Camera2D;
   private spatialHash: SpatialHash<number>;
   private particles!: ParticleSystem;
   private floatingText!: FloatingTextManager;
   private renderer!: GameRenderer;
   private ui: UIManager;
   private ads: AdPlatform;
-  private debug = new DebugOverlay();
 
   private screen: GameScreen = 'menu';
   private gameTime = 0;
-  private accumulator = 0;
-  private lastTime = 0;
   private playerId = -1;
   private hasRevived = false;
 
@@ -54,12 +49,9 @@ export class Game {
     minibossSpawned: new Set<number>(),
   };
 
-  private onResize = () => this.resize();
+  private gameCtx: GameContext | null = null;
+
   private onKeyDown = (e: KeyboardEvent) => {
-    if (e.code === 'F3') {
-      e.preventDefault();
-      this.debug.enabled = !this.debug.enabled;
-    }
     if (e.code === 'Escape') {
       if (this.screen === 'playing') {
         this.screen = 'paused';
@@ -73,40 +65,139 @@ export class Game {
 
   constructor(canvas: HTMLCanvasElement, ads: AdPlatform) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d')!;
+    this.ctx2d = canvas.getContext('2d')!;
     this.ads = ads;
-
-    this.camera = new Camera(window.innerWidth, window.innerHeight);
-    this.input = new InputManager(canvas);
     this.spatialHash = new SpatialHash(64);
 
-    this.resize();
-    window.addEventListener('resize', this.onResize);
-
     this.ui = new UIManager(
-      this.ctx,
+      this.ctx2d,
       (index) => this.onUpgradeSelected(index),
       () => this.restart(),
     );
     this.ui.setReviveHandler(() => this.revive());
     this.ui.enableTracking();
+  }
 
-    this.initGame();
+  enter(ctx: GameContext): void {
+    this.gameCtx = ctx;
+    this.camera = new Camera2D(window.innerWidth, window.innerHeight);
+    this.resize();
 
+    ctx.events.on('resize', () => this.resize());
     window.addEventListener('keydown', this.onKeyDown);
+
+    this.initGame(ctx);
+  }
+
+  exit(_ctx: GameContext): void {
+    window.removeEventListener('keydown', this.onKeyDown);
+    this.ui.destroy();
+    this.gameCtx = null;
+  }
+
+  update(ctx: GameContext, dt: number): void {
+    if (this.screen === 'menu') {
+      if (ctx.input.anyKey) {
+        this.screen = 'playing';
+        this.ads.gameplayStart();
+      }
+      return;
+    }
+
+    // Mobile pause button
+    if (ctx.input.pauseTap) {
+      if (this.screen === 'playing') {
+        this.screen = 'paused';
+        this.ads.gameplayStop();
+      } else if (this.screen === 'paused') {
+        this.screen = 'playing';
+        this.ads.gameplayStart();
+      }
+    }
+
+    if (this.screen !== 'playing') return;
+
+    this.gameTime += dt;
+    this.gameState.gameTime = this.gameTime;
+
+    this.world.update(dt);
+    this.particles.update(dt);
+    this.floatingText.update(dt);
+
+    // Update player visual rotation based on aim direction
+    const player = this.world.get<Player>(this.playerId, C.Player);
+    const vis = this.world.get<Visual>(this.playerId, C.Visual);
+    if (ctx.input.isAiming) {
+      vis.rotation = Math.atan2(ctx.input.aimDir.y, ctx.input.aimDir.x) + Math.PI / 2;
+    } else {
+      vis.rotation = Math.atan2(player.lastDirY, player.lastDirX) + Math.PI / 2;
+    }
+
+    // Camera follow
+    const pPos = this.world.get<Pos>(this.playerId, C.Pos);
+    this.camera.follow(pPos, 0.1, dt);
+    this.camera.update(dt);
+
+    this.checkLevelUp();
+    this.checkGameEnd();
+  }
+
+  render(ctx: GameContext, _alpha: number): void {
+    const c = this.ctx2d;
+    c.save();
+    const dpr = window.devicePixelRatio || 1;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    switch (this.screen) {
+      case 'menu':
+        this.renderer.render(this.world, this.gameTime, this.screen);
+        this.ui.drawMenu(w, h, ctx.input.isMobile);
+        break;
+      case 'playing':
+        this.renderer.render(this.world, this.gameTime, this.screen);
+        break;
+      case 'levelup':
+        this.renderer.render(this.world, this.gameTime, this.screen);
+        this.ui.drawLevelUp(w, h);
+        break;
+      case 'gameover':
+      case 'victory': {
+        this.renderer.render(this.world, this.gameTime, this.screen);
+        const player = this.world.get<Player>(this.playerId, C.Player);
+        this.ui.drawGameOver(w, h, player, this.gameTime, this.screen === 'victory');
+        break;
+      }
+      case 'paused':
+        this.renderer.render(this.world, this.gameTime, this.screen);
+        this.ui.drawPaused(w, h);
+        break;
+    }
+
+    // Joysticks (screen space, mobile only)
+    if (this.screen === 'playing' && ctx.input.isMobile) {
+      if (ctx.input.moveJoystickActive) {
+        drawJoystick(c, ctx.input.moveJoystickStart, ctx.input.moveJoystickCurrent, '#00ffff');
+      }
+      if (ctx.input.aimJoystickActive) {
+        drawJoystick(c, ctx.input.aimJoystickStart, ctx.input.aimJoystickCurrent, '#ff6633');
+      }
+    }
+
+    c.restore();
   }
 
   private resize(): void {
     const dpr = window.devicePixelRatio || 1;
     this.canvas.width = window.innerWidth * dpr;
     this.canvas.height = window.innerHeight * dpr;
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    // Use CSS pixels for game logic
-    this.camera.width = window.innerWidth;
-    this.camera.height = window.innerHeight;
+    this.ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.camera.resize(window.innerWidth, window.innerHeight);
   }
 
-  private initGame(): void {
+  private initGame(ctx: GameContext): void {
     this.world = new World();
     this.particles = new ParticleSystem();
     this.floatingText = new FloatingTextManager();
@@ -119,7 +210,7 @@ export class Game {
     this.hasRevived = false;
     this.ui.canRevive = this.ads.hasAds;
 
-    this.renderer = new GameRenderer(this.ctx, this.camera, this.particles, this.floatingText);
+    this.renderer = new GameRenderer(this.ctx2d, this.camera, this.particles, this.floatingText);
 
     // Spawn player
     this.playerId = this.world.spawn();
@@ -151,10 +242,10 @@ export class Game {
       rotation: 0,
     } as Visual);
 
-    // Register systems
-    this.world.addSystem(createInputSystem(this.input));
-    this.world.addSystem(createEnemyAISystem(this.spatialHash));
-    this.world.addSystem(createWeaponSystem(this.input, this.particles, this.floatingText, this.spatialHash, this.gameState));
+    // Register systems — use ctx.input from GameContext
+    this.world.addSystem(createInputSystem(ctx.input));
+    this.world.addSystem(createBTEnemySystem(this.spatialHash));
+    this.world.addSystem(createWeaponSystem(ctx.input, this.particles, this.floatingText, this.spatialHash, this.gameState));
     this.world.addSystem(createMovementSystem());
     this.world.addSystem(createProjectileSystem());
     this.world.addSystem(createCollisionSystem(this.spatialHash, this.particles, this.floatingText));
@@ -169,28 +260,26 @@ export class Game {
   }
 
   private restart(): void {
-    // Show interstitial ad between rounds, then restart
     this.ads.showInterstitial().catch(() => {}).finally(() => {
-      this.initGame();
-      this.screen = 'playing';
-      this.ads.gameplayStart();
+      if (this.gameCtx) {
+        this.initGame(this.gameCtx);
+        this.screen = 'playing';
+        this.ads.gameplayStart();
+      }
     });
   }
 
   private revive(): void {
     if (this.hasRevived) return;
-    // Show rewarded ad, then revive player with 50% HP
     this.ads.showRewarded().then((watched) => {
       if (watched) {
         this.hasRevived = true;
         this.ui.canRevive = false;
         const hp = this.world.get<Health>(this.playerId, C.Health);
         hp.current = Math.ceil(hp.max * 0.5);
-        // Brief invulnerability after revive
         hp.invuln = 2;
         this.screen = 'playing';
         this.ads.gameplayStart();
-        // Revive particles
         this.particles.emit(
           this.world.get<Pos>(this.playerId, C.Pos).x,
           this.world.get<Pos>(this.playerId, C.Pos).y,
@@ -206,12 +295,10 @@ export class Game {
     const upgrade = this.ui.currentUpgrades[index];
     if (!upgrade) return;
 
-    // Apply stat upgrades
     if (upgrade.id.startsWith('stat_')) {
       const statKey = upgrade.id.replace('stat_', '') as keyof typeof STAT_UPGRADES;
       const player = this.world.get<Player>(this.playerId, C.Player);
       const hp = this.world.get<Health>(this.playerId, C.Health);
-      // Track stat picks for HUD display
       player.statPicks[statKey] = (player.statPicks[statKey] || 0) + 1;
       switch (statKey) {
         case 'damage': this.gameState.damageMult += STAT_UPGRADES.damage.mult; break;
@@ -225,7 +312,6 @@ export class Game {
         case 'cooldown': this.gameState.cooldownMult += STAT_UPGRADES.cooldown.mult; break;
       }
     } else {
-      // Weapon upgrades handled by the action closure
       upgrade.action();
     }
 
@@ -240,11 +326,9 @@ export class Game {
       player.level++;
       player.nextLevelXp = xpForLevel(player.level);
 
-      // Heal on level up
       const hp = this.world.get<Health>(this.playerId, C.Health);
       hp.current = Math.min(hp.current + hp.max * 0.1, hp.max);
 
-      // Show upgrade screen
       this.ui.generateUpgrades(player);
       this.screen = 'levelup';
       this.particles.emit(
@@ -253,7 +337,7 @@ export class Game {
         30,
         { color: '#ffcc00', speed: 200, life: 0.6, size: 5, sizeEnd: 0 }
       );
-      break; // Handle one level up at a time
+      break;
     }
   }
 
@@ -271,127 +355,5 @@ export class Game {
       this.ads.gameplayStop();
       this.ads.happytime();
     }
-  }
-
-  start(): void {
-    this.lastTime = performance.now();
-    requestAnimationFrame((t) => this.loop(t));
-  }
-
-  private loop(currentTime: number): void {
-    const frameTime = Math.min(currentTime - this.lastTime, MAX_FRAME_TIME);
-    this.lastTime = currentTime;
-    this.debug.update(currentTime);
-
-    if (this.screen === 'menu') {
-      if (this.input.anyKey) {
-        this.screen = 'playing';
-        this.ads.gameplayStart();
-      }
-    }
-
-    // Mobile pause button
-    if (this.input.pauseTap) {
-      if (this.screen === 'playing') {
-        this.screen = 'paused';
-        this.ads.gameplayStop();
-      } else if (this.screen === 'paused') {
-        this.screen = 'playing';
-        this.ads.gameplayStart();
-      }
-    }
-
-    if (this.screen === 'playing') {
-      this.accumulator += frameTime;
-      while (this.accumulator >= TICK_DURATION) {
-        this.accumulator -= TICK_DURATION;
-        const dt = TICK_DURATION / 1000;
-
-        this.gameTime += dt;
-        this.gameState.gameTime = this.gameTime;
-
-        this.world.update(dt);
-        this.particles.update(dt);
-        this.floatingText.update(dt);
-
-        // Update player visual rotation based on aim direction
-        const player = this.world.get<Player>(this.playerId, C.Player);
-        const vis = this.world.get<Visual>(this.playerId, C.Visual);
-        if (this.input.isAiming) {
-          vis.rotation = Math.atan2(this.input.aimDir.y, this.input.aimDir.x) + Math.PI / 2;
-        } else {
-          vis.rotation = Math.atan2(player.lastDirY, player.lastDirX) + Math.PI / 2;
-        }
-
-        // Camera follow
-        const pPos = this.world.get<Pos>(this.playerId, C.Pos);
-        this.camera.follow(pPos, 0.1, dt);
-        this.camera.update(dt);
-
-        this.checkLevelUp();
-        this.checkGameEnd();
-
-        if (this.screen !== 'playing') break;
-      }
-    }
-
-    // Render
-    this.ctx.save();
-    const dpr = window.devicePixelRatio || 1;
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-
-    switch (this.screen) {
-      case 'menu':
-        this.renderer.render(this.world, this.gameTime, this.screen);
-        this.ui.drawMenu(w, h, this.input.isMobile);
-        break;
-      case 'playing':
-        this.renderer.render(this.world, this.gameTime, this.screen);
-        break;
-      case 'levelup':
-        this.renderer.render(this.world, this.gameTime, this.screen);
-        this.ui.drawLevelUp(w, h);
-        break;
-      case 'gameover':
-      case 'victory': {
-        this.renderer.render(this.world, this.gameTime, this.screen);
-        const player = this.world.get<Player>(this.playerId, C.Player);
-        this.ui.drawGameOver(w, h, player, this.gameTime, this.screen === 'victory');
-        break;
-      }
-      case 'paused':
-        this.renderer.render(this.world, this.gameTime, this.screen);
-        this.ui.drawPaused(w, h);
-        break;
-    }
-
-    // Joysticks (screen space, mobile only)
-    if (this.screen === 'playing' && this.input.isMobile) {
-      this.input.drawJoystick(this.ctx);
-      this.input.drawAimJoystick(this.ctx);
-    }
-
-    // Debug overlay (screen space)
-    if (this.debug.enabled) {
-      this.debug.set('entities', this.world.count(C.Pos));
-      this.debug.set('enemies', this.world.count(C.Enemy));
-      this.debug.set('screen', this.screen);
-      this.debug.draw(this.ctx);
-    }
-
-    this.ctx.restore();
-
-    this.input.clearFrame();
-    requestAnimationFrame((t) => this.loop(t));
-  }
-
-  destroy(): void {
-    window.removeEventListener('resize', this.onResize);
-    window.removeEventListener('keydown', this.onKeyDown);
-    this.input.destroy();
-    this.ui.destroy();
   }
 }

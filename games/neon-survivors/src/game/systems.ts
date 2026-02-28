@@ -1,8 +1,9 @@
 /** All game systems — pure functions operating on the ECS world */
 
-import { Vec2, randomAngle, randomRange, clamp, World, Entity, InputManager, SpatialHash, ParticleSystem, FloatingTextManager } from '@survivors/core';
-import { C, Pos, Vel, Health, Collider, Player, Enemy, Projectile, XPGem, Visual, LightningData, Bonus } from './components';
+import { Vec2, randomAngle, randomRange, clamp, World, Entity, InputManager, SpatialHash, ParticleSystem, FloatingTextManager, Blackboard, type BTContext } from '@survivors/core';
+import { C, Pos, Vel, Health, Collider, Player, Enemy, Projectile, XPGem, Visual, LightningData, Bonus, type BehaviorTreeData } from './components';
 import { WEAPONS, ENEMIES, ENEMY_SPAWN_DISTANCE, MAX_ENEMIES, GAME_DURATION, BOSS_TIMES, MINIBOSS_TIMES } from './config';
+import { ENEMY_TREES, simpleLODTree } from './enemy-behaviors';
 
 const FIRE_COLORS = ['#ff6600', '#ff8822', '#ffaa00', '#ff4400', '#ffcc33'];
 
@@ -46,22 +47,30 @@ export function createMovementSystem() {
   };
 }
 
-// ─── ENEMY AI SYSTEM ─────────────────────────────────────────────────
-export function createEnemyAISystem(spatialHash: SpatialHash<Entity>) {
-  const seekVec = new Vec2();
-  const sepVec = new Vec2();
-  let frame = 0;
+// ─── ENEMY AI SYSTEM (Behavior Tree) ────────────────────────────────
+// LOD distance thresholds (squared for fast comparison)
+const LOD_CLOSE_SQ = 400 * 400;    // full BT
+const LOD_MED_SQ   = 800 * 800;    // seek only, every frame
+const LOD_FAR_SQ   = 1500 * 1500;  // seek only, every 4 frames
 
-  return (world: World, _dt: number) => {
+export function createBTEnemySystem(spatialHash: SpatialHash<Entity>) {
+  const sepVec = new Vec2();
+  const nearbyBuf: Entity[] = [];  // reusable query buffer
+  let frame = 0;
+  let totalTime = 0;
+
+  return (world: World, dt: number) => {
     frame++;
+    totalTime += dt;
     const players = world.query(C.Player, C.Pos);
     if (players.length === 0) return;
     const pPos = world.get<Pos>(players[0], C.Pos);
 
-    for (const e of world.query(C.Enemy, C.Pos, C.Vel)) {
+    for (const e of world.query(C.Enemy, C.Pos, C.Vel, C.BehaviorTree)) {
       const pos = world.get<Pos>(e, C.Pos);
       const enemy = world.get<Enemy>(e, C.Enemy);
       const vel = world.get<Vel>(e, C.Vel);
+      const btData = world.get<BehaviorTreeData>(e, C.BehaviorTree);
 
       // Guard: repair corrupted enemy speed
       if (!isFinite(enemy.speed) || enemy.speed <= 0) enemy.speed = 50;
@@ -70,20 +79,35 @@ export function createEnemyAISystem(spatialHash: SpatialHash<Entity>) {
       const dy = pPos.y - pos.y;
       const distSq = dx * dx + dy * dy;
 
-      // LOD: distant enemies update less often
-      if (distSq > 1500 * 1500 && (e + frame) % 4 !== 0) continue;
-      if (distSq > 800 * 800 && (e + frame) % 2 !== 0) continue;
+      // LOD frame-skipping: distant enemies update less often
+      if (distSq > LOD_FAR_SQ && (e + frame) % 4 !== 0) continue;
+      if (distSq > LOD_MED_SQ && (e + frame) % 2 !== 0) continue;
 
-      // Seek player
-      const dist = Math.sqrt(distSq) || 1;
-      seekVec.set(dx / dist, dy / dist);
+      // LOD tree selection: distant enemies use simple seek
+      const fullTree = ENEMY_TREES[enemy.type];
+      if (!fullTree) continue;
+      const tree = distSq > LOD_CLOSE_SQ ? simpleLODTree : fullTree;
+
+      // Set shared blackboard values for this tick
+      const bb = btData.blackboard;
+      bb.set('__playerX', pPos.x);
+      bb.set('__playerY', pPos.y);
+      bb.set('__time', totalTime);
+
+      // Tick the behavior tree
+      const ctx: BTContext = { entity: e, world, dt, blackboard: bb };
+      tree(ctx);
+
+      // Read velocity intent from blackboard
+      const bvx = bb.get<number>('__vx', 0);
+      const bvy = bb.get<number>('__vy', 0);
 
       // Separation from nearby enemies (uses previous frame spatial hash)
       sepVec.set(0, 0);
-      const nearby = spatialHash.query(pos.x, pos.y, 28);
+      spatialHash.queryInto(pos.x, pos.y, 28, nearbyBuf);
       let sepCount = 0;
-      for (let i = 0; i < nearby.length; i++) {
-        const other = nearby[i];
+      for (let i = 0; i < nearbyBuf.length; i++) {
+        const other = nearbyBuf[i];
         if (other === e || !world.has(other, C.Enemy)) continue;
         const oPos = world.get<Pos>(other, C.Pos);
         const sdx = pos.x - oPos.x;
@@ -97,14 +121,27 @@ export function createEnemyAISystem(spatialHash: SpatialHash<Entity>) {
         }
       }
 
-      if (sepCount > 0) {
-        const sLen = Math.sqrt(sepVec.x * sepVec.x + sepVec.y * sepVec.y) || 1;
-        vel.x = (seekVec.x * 0.75 + sepVec.x / sLen * 0.25) * enemy.speed;
-        vel.y = (seekVec.y * 0.75 + sepVec.y / sLen * 0.25) * enemy.speed;
+      // Normalize BT velocity to get direction, then blend with separation
+      const bLen = Math.sqrt(bvx * bvx + bvy * bvy);
+      if (bLen > 0) {
+        const ndx = bvx / bLen;
+        const ndy = bvy / bLen;
+        // Use the speed from the BT (it already factors in entity speed + multipliers)
+        const speed = bLen;
+
+        if (sepCount > 0) {
+          const sLen = Math.sqrt(sepVec.x * sepVec.x + sepVec.y * sepVec.y) || 1;
+          vel.x = (ndx * 0.75 + sepVec.x / sLen * 0.25) * speed;
+          vel.y = (ndy * 0.75 + sepVec.y / sLen * 0.25) * speed;
+        } else {
+          vel.x = bvx;
+          vel.y = bvy;
+        }
       } else {
-        vel.x = seekVec.x * enemy.speed;
-        vel.y = seekVec.y * enemy.speed;
+        vel.x = 0;
+        vel.y = 0;
       }
+
       // Guard: zero out non-finite velocities
       if (!isFinite(vel.x)) vel.x = 0;
       if (!isFinite(vel.y)) vel.y = 0;
@@ -522,6 +559,7 @@ function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime: number
     glowSize: def.isBoss ? 20 : 8,
     rotation: 0,
   } as Visual);
+  world.add(e, C.BehaviorTree, { blackboard: new Blackboard() } as BehaviorTreeData);
 }
 
 // ─── DEATH SYSTEM ────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 import { randomRange, randomAngle, TWO_PI } from './math';
 
-interface Particle {
+export interface Particle {
   x: number; y: number;
   vx: number; vy: number;
   life: number; maxLife: number;
@@ -66,25 +66,7 @@ export class ParticleSystem {
     }
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
-    // Sort by color to batch fillStyle changes (reduces GPU state flushes)
-    this.particles.sort((a, b) => (a.color < b.color ? -1 : a.color > b.color ? 1 : 0));
-
-    let lastColor = '';
-    for (const p of this.particles) {
-      const t = 1 - p.life / p.maxLife;
-      const size = p.size + (p.sizeEnd - p.size) * t;
-      ctx.globalAlpha = (1 - t) * 0.9;
-      if (p.color !== lastColor) {
-        ctx.fillStyle = p.color;
-        lastColor = p.color;
-      }
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, Math.max(size, 0.5), 0, TWO_PI);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-  }
+  get activeParticles(): ReadonlyArray<Readonly<Particle>> { return this.particles; }
 
   get count(): number { return this.particles.length; }
 }

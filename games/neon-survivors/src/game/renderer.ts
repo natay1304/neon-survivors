@@ -1,8 +1,9 @@
 /** Game renderer — draws background, entities, effects, HUD */
 
-import { World, Entity, Camera, ParticleSystem, FloatingTextManager, TWO_PI, clamp } from '@survivors/core';
+import { World, Entity, Camera2D, ParticleSystem, FloatingTextManager, TWO_PI, clamp } from '@survivors/core';
 import { C, Pos, Health, Visual, Player, LightningData, Bonus } from './components';
 import { WEAPONS, GAME_DURATION, STAT_UPGRADES } from './config';
+import { drawParticles, drawFloatingText, applyCameraToContext } from './canvas-helpers';
 
 const GRID_SIZE = 64;
 const BG_COLOR = '#0a0a1a';
@@ -11,10 +12,11 @@ export class GameRenderer {
   private starLayers: { x: number; y: number; s: number; a: number }[][] = [[], [], []];
   private planets: { x: number; y: number; radius: number; color: string; ringColor: string | null; highlight: string }[] = [];
   private now = 0;
+  private entityBuf: { e: Entity; pos: Pos; vis: Visual; y: number }[] = [];
 
   constructor(
     private ctx: CanvasRenderingContext2D,
-    private camera: Camera,
+    private camera: Camera2D,
     private particles: ParticleSystem,
     private floatingText: FloatingTextManager,
   ) {
@@ -74,14 +76,14 @@ export class GameRenderer {
     this.drawParallax(w, h);
 
     ctx.save();
-    this.camera.apply(ctx);
+    applyCameraToContext(ctx, this.camera.pos, this.camera.shakeOffset, w, h);
 
     this.drawBackground(w, h);
     this.drawAuras(world);
     this.drawEntities(world);
     this.drawLightning(world);
-    this.particles.draw(ctx);
-    this.floatingText.draw(ctx);
+    drawParticles(ctx, this.particles);
+    drawFloatingText(ctx, this.floatingText);
 
     ctx.restore();
 
@@ -215,19 +217,27 @@ export class GameRenderer {
     const ctx = this.ctx;
     const cam = this.camera;
 
-    // Collect and sort by Y for pseudo-depth
-    const entities: { e: Entity; pos: Pos; vis: Visual }[] = [];
+    // Collect into persistent buffer and sort by Y for pseudo-depth
+    let count = 0;
     for (const e of world.query(C.Pos, C.Visual)) {
       // Skip XP gems and bonuses — drawn separately with animations below
       if (world.has(e, C.XPGem) || world.has(e, C.Bonus)) continue;
       const pos = world.get<Pos>(e, C.Pos);
       if (!cam.isVisible(pos.x, pos.y, 50)) continue;
       const vis = world.get<Visual>(e, C.Visual);
-      entities.push({ e, pos, vis });
+      if (count >= this.entityBuf.length) {
+        this.entityBuf.push({ e, pos, vis, y: pos.y });
+      } else {
+        const entry = this.entityBuf[count];
+        entry.e = e; entry.pos = pos; entry.vis = vis; entry.y = pos.y;
+      }
+      count++;
     }
-    entities.sort((a, b) => a.pos.y - b.pos.y);
+    this.entityBuf.length = count;
+    this.entityBuf.sort((a, b) => a.y - b.y);
 
-    for (const { e, pos, vis } of entities) {
+    for (let i = 0; i < count; i++) {
+      const { e, pos, vis } = this.entityBuf[i];
       ctx.save();
       ctx.translate(pos.x, pos.y);
 
@@ -263,10 +273,14 @@ export class GameRenderer {
         continue;
       }
 
-      // Glow effect
+      // Fake glow — cheap radial circle instead of expensive shadowBlur
       if (vis.glow) {
-        ctx.shadowColor = vis.glow;
-        ctx.shadowBlur = vis.glowSize ?? 10;
+        ctx.globalAlpha = 0.15;
+        ctx.fillStyle = vis.glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, vis.size + (vis.glowSize ?? 10), 0, TWO_PI);
+        ctx.fill();
+        ctx.globalAlpha = 1;
       }
 
       // Damage flash
@@ -286,8 +300,6 @@ export class GameRenderer {
       if (r) ctx.rotate(r);
 
       this.drawShape(ctx, vis.shape, vis.size);
-
-      ctx.shadowBlur = 0;
 
       // Health bar for enemies
       if (world.has(e, C.Enemy) && hp && hp.current < hp.max) {
@@ -315,8 +327,12 @@ export class GameRenderer {
       ctx.save();
       ctx.translate(pos.x, pos.y + bob);
       if (vis.glow) {
-        ctx.shadowColor = vis.glow;
-        ctx.shadowBlur = vis.glowSize ?? 6;
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = vis.glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, vis.size + (vis.glowSize ?? 6), 0, TWO_PI);
+        ctx.fill();
+        ctx.globalAlpha = 1;
       }
       ctx.fillStyle = vis.color;
       this.drawShape(ctx, 'diamond', vis.size);
@@ -353,13 +369,18 @@ export class GameRenderer {
       // Shape
       ctx.globalAlpha = 1;
       if (vis.rotation) ctx.rotate(vis.rotation);
-      ctx.shadowColor = vis.glow ?? vis.color;
-      ctx.shadowBlur = 18;
+      // Fake glow for bonus
+      const glowColor = vis.glow ?? vis.color;
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = glowColor;
+      ctx.beginPath();
+      ctx.arc(0, 0, vis.size + 14, 0, TWO_PI);
+      ctx.fill();
+      ctx.globalAlpha = 1;
       ctx.fillStyle = vis.color;
       this.drawShape(ctx, vis.shape, vis.size);
 
       // Bonus type icon (text label)
-      ctx.shadowBlur = 0;
       ctx.rotate(-(vis.rotation ?? 0)); // undo spin for label
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 9px monospace';
@@ -378,13 +399,11 @@ export class GameRenderer {
       const l = world.get<LightningData>(e, C.Lightning);
 
       ctx.save();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 3;
-      ctx.shadowColor = '#4488ff';
-      ctx.shadowBlur = 15;
       ctx.globalAlpha = clamp(l.timer / 0.1, 0, 1);
 
-      // Jagged lightning line
+      // Thick blue under-stroke for glow effect (cheaper than shadowBlur)
+      ctx.strokeStyle = '#4488ff';
+      ctx.lineWidth = 7;
       ctx.beginPath();
       ctx.moveTo(pos.x, pos.y);
       const dx = l.targetX - pos.x;
@@ -396,6 +415,12 @@ export class GameRenderer {
         ctx.lineTo(pos.x + dx * t + jitter, pos.y + dy * t + jitter);
       }
       ctx.stroke();
+
+      // Thin white core line
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
       ctx.restore();
     }
   }

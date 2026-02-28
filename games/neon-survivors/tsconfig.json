@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
+    "types": ["vite/client"],
     "paths": {
       "@survivors/core": ["../../packages/core/src/index.ts"],
       "@survivors/sdk": ["../../packages/sdk/src/index.ts"]

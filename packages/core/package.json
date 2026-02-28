@@ -1,8 +1,17 @@
 {
   "name": "@survivors/core",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "eventemitter3": "^5.0.1",
+    "stats.js": "^0.17.0",
+    "three": "^0.171.0"
+  },
+  "devDependencies": {
+    "@types/stats.js": "^0.17.4",
+    "@types/three": "^0.183.1"
   }
 }

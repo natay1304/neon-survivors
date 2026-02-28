@@ -65,4 +65,22 @@ export class SpatialHash<T = number> {
     }
     return result;
   }
+
+  /** Like query() but reuses the caller's array to avoid allocation. Returns item count. */
+  queryInto(x: number, y: number, radius: number, out: T[]): number {
+    out.length = 0;
+    const range = this.cellRange(x, y, radius);
+    if (!range) return 0;
+    const [minCx, maxCx, minCy, maxCy] = range;
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        const cell = this.cells.get(this.key(cx, cy));
+        if (cell) {
+          for (let i = 0; i < cell.length; i++) out.push(cell[i]);
+        }
+      }
+    }
+    return out.length;
+  }
 }

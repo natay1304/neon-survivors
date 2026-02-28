@@ -1,4 +1,4 @@
-/** 2D camera with smooth follow and screen shake */
+/** @deprecated Use Camera2D from './camera-2d' instead. This class will be removed. */
 
 import { Vec2, lerp, randomRange } from './math';
 
