@@ -21,7 +21,7 @@ export const C = {
 } as const;
 
 export interface Visual {
-  shape: 'circle' | 'triangle' | 'diamond' | 'square' | 'hexagon' | 'rocket' | 'star4' | 'spike' | 'crate' | 'barrel';
+  shape: 'circle' | 'triangle' | 'diamond' | 'square' | 'hexagon' | 'rocket' | 'star4' | 'spike' | 'crate' | 'barrel' | 'mech';
   color: string;
   size: number;
   glow?: string;
