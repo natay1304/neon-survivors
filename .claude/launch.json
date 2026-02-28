@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace=games/neon-survivors"],
       "port": 5173
+    },
+    {
+      "name": "neon-strike",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=games/neon-strike"],
+      "port": 5174
     }
   ]
 }
