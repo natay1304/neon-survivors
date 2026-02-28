@@ -13,3 +13,5 @@ export * from './renderer';
 export * from './scene';
 export * from './game-context';
 export * from './behavior-tree';
+export * from './audio';
+export * from './network';

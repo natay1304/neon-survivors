@@ -274,7 +274,7 @@ export class GameRenderer {
       }
 
       // Fake glow — cheap radial circle instead of expensive shadowBlur
-      if (vis.glow) {
+      if (vis.glow && !world.has(e, C.Enemy)) {
         ctx.globalAlpha = 0.15;
         ctx.fillStyle = vis.glow;
         ctx.beginPath();

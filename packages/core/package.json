@@ -7,10 +7,13 @@
   },
   "dependencies": {
     "eventemitter3": "^5.0.1",
+    "howler": "^2.2.4",
+    "socket.io-client": "^4.8.0",
     "stats.js": "^0.17.0",
-    "three": "^0.171.0"
+    "three": "^0.183.2"
   },
   "devDependencies": {
+    "@types/howler": "^2.2.12",
     "@types/stats.js": "^0.17.4",
     "@types/three": "^0.183.1"
   }
