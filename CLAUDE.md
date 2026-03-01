@@ -130,6 +130,7 @@ You are an expert in game development, 2D and 3D systems on the web, multiplayer
 - Physics and collision: broad-phase / narrow-phase, spatial partitioning.
 - AI: behavior trees, steering behaviors, state machines.
 - Performance: object pooling, avoiding GC pressure, profiling bottlenecks.
+- **MCP tool integration** — use Figma MCP for design extraction and Chrome MCP for browser automation when appropriate. Always load MCP tools with `tool_search_tool_regex` before using them.
 
 ### Code Quality
 
@@ -185,6 +186,68 @@ When implementing multiplayer features:
 - Design for variable latency (100-300ms).
 - Separate network serialization from game objects.
 
+### Using MCP (Model Context Protocol) Tools
+
+**MCP tools extend the agent's capabilities for design integration and browser automation.** Use MCP tools to streamline workflows that involve external systems.
+
+#### Available MCP Integrations
+
+**Chrome Browser Automation** (`mcp_io_github_chr_*`)
+
+- Automate browser testing and validation
+- Navigate pages, click elements, fill forms
+- Capture screenshots and memory snapshots
+- Monitor console logs and network requests
+- Analyze performance metrics and traces
+- Handle dialogs, emulate devices, execute scripts
+
+#### When to Use MCP Tools
+
+**Testing & Validation (Chrome Automation)**
+
+- When automating end-to-end game testing in the browser
+- To capture screenshots for visual regression testing
+- When debugging rendering or performance issues
+- To validate game behavior across different viewport sizes
+- When monitoring network traffic for multiplayer features
+- To profile memory usage and detect leaks
+
+#### Best Practices
+
+**Before using MCP tools:**
+
+1. **Load tools first** — Use `tool_search_tool_regex` to load MCP tools before calling them (e.g., search `mcp_io_github_chr`).
+2. **Verify tool availability** — Ensure the specific MCP tool is loaded and available before invocation.
+
+**When using Chrome MCP:**
+
+- Use headless mode for CI/CD integration.
+- Capture screenshots at key game states for regression testing.
+- Monitor performance traces to validate 60fps target.
+- Use network request monitoring to debug multiplayer issues.
+- Clean up browser pages after tests to avoid resource leaks.
+
+**Integration with Development Workflow:**
+
+- Use Chrome MCP in automated testing scripts alongside build processes.
+- Combine Chrome automation with performance profiling to catch frame rate regressions.
+- Use browser automation to validate games work correctly on different ad platforms.
+
+#### Example Workflows
+
+**Automated Game Testing:**
+
+```bash
+1. Load Chrome MCP tool: tool_search_tool_regex("mcp_io_github_chr")
+2. Create new browser page: mcp_io_github_chr_new_page()
+3. Navigate to game: mcp_io_github_chr_navigate_page(game_url)
+4. Interact with game: mcp_io_github_chr_click(), mcp_io_github_chr_type_text()
+5. Capture results: mcp_io_github_chr_take_screenshot()
+6. Verify performance: mcp_io_github_chr_performance_analyze_insight()
+```
+
+**Remember:** MCP tools are optional enhancements. Core game development should not depend on MCP availability. Always fall back to manual workflows when MCP tools are unavailable.
+
 ### CI/CD and Multi-Project Pipelines
 
 - GitHub Actions deploys neon-survivors to GitHub Pages on push to `main`.
@@ -198,9 +261,11 @@ When implementing multiplayer features:
 2. Add `package.json` with `@survivors/core` and `@survivors/sdk` as dependencies (use `"*"` version for workspace resolution).
 3. Add `vite.config.ts` with path aliases to `../../packages/core/src` and `../../packages/sdk/src`.
 4. Add `tsconfig.json` extending root config with appropriate paths.
-5. The game imports from `@survivors/core` and `@survivors/sdk` — no direct file path imports to packages.
-6. Add `build:<name>` and `dev:<name>` scripts to root `package.json`.
-7. Use shared core modules (`canvas-draw`, `collision`, `health`, `systems`) for common mechanics instead of reimplementing them.
+5. **Optional: Use Figma MCP** — If designs exist in Figma, use `mcp_figma_*` tools to extract design tokens (colors, spacing, typography) into `config.ts`.
+6. The game imports from `@survivors/core` and `@survivors/sdk` — no direct file path imports to packages.
+7. Add `build:<name>` and `dev:<name>` scripts to root `package.json`.
+8. Use shared core modules (`canvas-draw`, `collision`, `health`, `systems`) for common mechanics instead of reimplementing them.
+9. **Optional: Use Chrome MCP** — Set up automated testing with `mcp_io_github_chr_*` tools for regression testing and performance validation.
 
 ## Existing Games
 
