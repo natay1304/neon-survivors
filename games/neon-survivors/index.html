@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Neon Survivors</title>
+  <!-- Telegram Mini App SDK — must load first to initialize window.Telegram.WebApp -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <!-- Platform SDKs — loaded conditionally -->
   <script>
     if (location.hostname.includes('yandex.net')) {
@@ -11,7 +13,7 @@
       s.src = 'https://yandex.ru/games/sdk/v2';
       document.head.appendChild(s);
     }
-    if (window.Telegram && window.Telegram.WebApp) {
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
       var s = document.createElement('script');
       s.src = 'https://sad.adsgram.ai/js/sad.min.js';
       document.head.appendChild(s);

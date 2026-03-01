@@ -13,7 +13,8 @@ function detectPlatform(): AdPlatform {
   if (window.CrazyGames?.SDK) return new CrazyGamesPlatform();
   // YaGames global only exists when SDK script is loaded (on yandex.net)
   if (window.YaGames) return new YandexPlatform();
-  if (window.Telegram?.WebApp) return new TelegramPlatform();
+  // initData is non-empty only inside a real Telegram Mini App (not in a regular browser)
+  if (window.Telegram?.WebApp?.initData) return new TelegramPlatform();
   return new NoopPlatform();
 }
 
