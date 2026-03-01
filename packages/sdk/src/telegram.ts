@@ -18,15 +18,29 @@ export class TelegramPlatform implements AdPlatform {
     tg.expand();
     console.log('[SDK] Telegram Mini App detected');
 
-    // Init Adsgram ads if script loaded
-    if (window.Adsgram) {
-      try {
-        this.adController = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
-        console.log('[SDK] Adsgram initialized');
-      } catch (e) {
-        console.warn('[SDK] Adsgram init failed:', e);
-      }
+    try {
+      await this.waitForAdsgram();
+      this.adController = window.Adsgram!.init({ blockId: ADSGRAM_BLOCK_ID });
+      console.log('[SDK] Adsgram initialized');
+    } catch (e) {
+      console.warn('[SDK] Adsgram init failed:', e);
     }
+  }
+
+  /** Wait for window.Adsgram to be defined (script loads async). Times out after 5s. */
+  private waitForAdsgram(): Promise<void> {
+    if (window.Adsgram) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const script = document.querySelector<HTMLScriptElement>('script[src*="adsgram"]');
+      if (script) {
+        script.addEventListener('load', () => resolve(), { once: true });
+        script.addEventListener('error', () => reject(new Error('Adsgram script failed to load')), { once: true });
+      }
+      // Timeout fallback
+      setTimeout(() => {
+        window.Adsgram ? resolve() : reject(new Error('Adsgram load timeout'));
+      }, 5000);
+    });
   }
 
   async showInterstitial(): Promise<void> {
