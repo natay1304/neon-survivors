@@ -37,6 +37,9 @@ export const CEILING_LINE_COLOR = '#ff3366';
 export const DEATH_FREEZE_TIME = 0.4;
 export const DEATH_PARTICLES = 30;
 export const JUMP_PARTICLES = 6;
+export const TRAIL_PARTICLE_CHANCE = 0.4;
+export const COLLISION_CULL_MULTIPLIER = 3;
+export const SPIKE_HITBOX_SHRINK = 0.2;
 
 // ---------------------------------------------------------------------------
 // Obstacle types

@@ -11,6 +11,7 @@ import type { Scene, GameContext } from '@survivors/core';
 import {
   LEVELS, GRAVITY, JUMP_FORCE, PLAYER_SIZE, GROUND_Y_OFFSET,
   DEATH_FREEZE_TIME, DEATH_PARTICLES, JUMP_PARTICLES,
+  TRAIL_PARTICLE_CHANCE, COLLISION_CULL_MULTIPLIER, SPIKE_HITBOX_SHRINK,
   PARTICLE_COLORS, getLevelLength,
 } from './config';
 import type { ObstacleType } from './config';
@@ -181,7 +182,7 @@ export class NeonDashScene implements Scene {
     }
 
     // Trail particles while moving
-    if (Math.random() < 0.4) {
+    if (Math.random() < TRAIL_PARTICLE_CHANCE) {
       this.particles.emit(
         this.playerX - PLAYER_SIZE / 2,
         this.groundY - 2,
@@ -360,11 +361,11 @@ export class NeonDashScene implements Scene {
 
     for (const obs of this.obstacles) {
       // Quick distance check
-      if (Math.abs(obs.x - px) > pSize * 3) continue;
+      if (Math.abs(obs.x - px) > pSize * COLLISION_CULL_MULTIPLIER) continue;
 
       if (obs.type === 'spike' || obs.type === 'spike_down' || obs.type === 'double_spike') {
         // Spike collision — use triangle approximation (shrunk hitbox)
-        const shrink = pSize * 0.2;
+        const shrink = pSize * SPIKE_HITBOX_SHRINK;
         const sLeft = obs.x - obs.w / 2 + shrink;
         const sRight = obs.x + obs.w / 2 - shrink;
         const sTop = obs.y + shrink;
