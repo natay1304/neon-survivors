@@ -3,6 +3,7 @@
 import { World, Entity, Camera2D, ParticleSystem, FloatingTextManager, TWO_PI, clamp } from '@survivors/core';
 import { C, Pos, Health, Visual, Player, LightningData, Bonus } from './components';
 import { WEAPONS, GAME_DURATION, STAT_UPGRADES } from './config';
+import { t } from './i18n';
 import { drawParticles, drawFloatingText, applyCameraToContext } from './canvas-helpers';
 
 const GRID_SIZE = 64;
@@ -527,10 +528,11 @@ export class GameRenderer {
     ctx.fillText(`${min}:${sec.toString().padStart(2, '0')}`, w / 2, 35);
 
     // Kill count (top right)
+    const strings = t();
     ctx.font = '18px monospace';
     ctx.textAlign = 'right';
     ctx.fillStyle = '#ff8888';
-    ctx.fillText(`kills: ${player.kills}`, w - 60, 35);
+    ctx.fillText(`${strings.killsLabel} ${player.kills}`, w - 60, 35);
 
     // Pause button (top right corner)
     const pbX = w - 48, pbY = 12, pbS = 36;
@@ -559,7 +561,7 @@ export class GameRenderer {
 
     ctx.font = 'bold 11px monospace';
     ctx.textAlign = 'left';
-    const hpText = `HP ${Math.ceil(hp.current)}/${Math.ceil(hp.max)}`;
+    const hpText = `${strings.hpLabel} ${Math.ceil(hp.current)}/${Math.ceil(hp.max)}`;
     // Dark outline for readability on green/yellow bar
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 3;
@@ -571,7 +573,7 @@ export class GameRenderer {
     ctx.fillStyle = '#888888';
     const enemyCount = world.count(C.Enemy);
     ctx.font = '12px monospace';
-    ctx.fillText(`enemies: ${enemyCount}`, 20, hpBarY + hpBarH + 16);
+    ctx.fillText(`${strings.enemiesLabel} ${enemyCount}`, 20, hpBarY + hpBarH + 16);
 
     // Stat picks (under enemy count, left side)
     const statKeys = Object.keys(player.statPicks).filter(k => player.statPicks[k] > 0);
@@ -650,7 +652,7 @@ export class GameRenderer {
     ctx.fillStyle = '#ffaa33';
     ctx.font = 'bold 16px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(`LV ${player.level}`, w / 2, h - 16);
+    ctx.fillText(`${strings.lvLabel} ${player.level}`, w / 2, h - 16);
 
     // Weapon icons (bottom right)
     const iconSize = 28;
@@ -694,6 +696,6 @@ export class GameRenderer {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#444466';
     ctx.font = '11px monospace';
-    ctx.fillText('MOUSE = aim  |  ESC = pause', 20, h - 16);
+    ctx.fillText(strings.aimHintHud, 20, h - 16);
   }
 }

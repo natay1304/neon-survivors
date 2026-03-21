@@ -3,6 +3,7 @@
 import { Player } from './components';
 import { WEAPONS, STAT_UPGRADES } from './config';
 import { shuffle } from '@survivors/core';
+import { t, getLocale, setLocale } from './i18n';
 
 export type GameScreen = 'menu' | 'playing' | 'levelup' | 'gameover' | 'victory' | 'paused';
 
@@ -30,7 +31,6 @@ export class UIManager {
     private onUpgradeSelected: (index: number) => void,
     private onRestart: () => void,
   ) {
-    // Click handler
     this.ctx.canvas.addEventListener('click', this.onClick);
     this.ctx.canvas.addEventListener('touchend', this.onTouch);
   }
@@ -38,8 +38,8 @@ export class UIManager {
   drawMenu(w: number, h: number, isMobile = false): void {
     const ctx = this.ctx;
     const s = Math.min(1, w / 700);
+    const strings = t();
 
-    // Dim background
     ctx.fillStyle = 'rgba(10, 10, 26, 0.95)';
     ctx.fillRect(0, 0, w, h);
 
@@ -56,54 +56,80 @@ export class UIManager {
     ctx.restore();
 
     // Subtitle
-    ctx.textAlign = 'center';
     ctx.fillStyle = '#8888aa';
     ctx.font = `${Math.max(12, Math.round(16 * s))}px monospace`;
-    ctx.fillText('Survive the swarm. Grow stronger.', w / 2, cy - 10);
+    ctx.fillText(strings.subtitle, w / 2, cy - 10);
 
     // Start prompt
     const pulse = 0.5 + Math.sin(Date.now() * 0.004) * 0.5;
     ctx.globalAlpha = 0.5 + pulse * 0.5;
     ctx.fillStyle = '#ffffff';
     ctx.font = `${Math.max(16, Math.round(20 * s))}px monospace`;
-    ctx.fillText('TAP or PRESS ANY KEY', w / 2, cy + 50);
+    ctx.fillText(strings.tapToStart, w / 2, cy + 50);
     ctx.globalAlpha = 1;
 
     // Controls
     ctx.fillStyle = '#555566';
     ctx.font = `${Math.max(11, Math.round(13 * s))}px monospace`;
     if (isMobile) {
-      ctx.fillText('Left joystick = move', w / 2, cy + 100);
-      ctx.fillText('Right joystick = aim & shoot', w / 2, cy + 118);
+      ctx.fillText(strings.moveLeft, w / 2, cy + 100);
+      ctx.fillText(strings.aimLeft, w / 2, cy + 118);
     } else {
-      ctx.fillText('WASD / Arrows = move', w / 2, cy + 100);
-      ctx.fillText('Mouse = aim & shoot  |  ESC = pause', w / 2, cy + 118);
+      ctx.fillText(strings.movePC, w / 2, cy + 100);
+      ctx.fillText(strings.aimPC, w / 2, cy + 118);
+    }
+
+    // Language switcher (top-right)
+    this.drawLangSwitcher(w, s);
+  }
+
+  private drawLangSwitcher(w: number, s: number): void {
+    const ctx = this.ctx;
+    const locale = getLocale();
+    const btnW = Math.max(32, Math.round(38 * s));
+    const btnH = Math.max(20, Math.round(24 * s));
+    const gap = 4;
+    const totalW = btnW * 2 + gap;
+    const rx = w - totalW - 12;
+    const ry = 12;
+    const fontSize = Math.max(10, Math.round(13 * s));
+
+    for (const [i, lang] of (['en', 'ru'] as const).entries()) {
+      const bx = rx + i * (btnW + gap);
+      const active = locale === lang;
+      ctx.fillStyle = active ? '#00ffff22' : 'transparent';
+      ctx.fillRect(bx, ry, btnW, btnH);
+      ctx.strokeStyle = active ? '#00ffff' : '#444466';
+      ctx.lineWidth = active ? 1.5 : 1;
+      ctx.strokeRect(bx, ry, btnW, btnH);
+      ctx.fillStyle = active ? '#00ffff' : '#555577';
+      ctx.font = `bold ${fontSize}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(lang.toUpperCase(), bx + btnW / 2, ry + btnH / 2 + fontSize * 0.35);
     }
   }
 
   drawLevelUp(w: number, h: number): void {
     const ctx = this.ctx;
+    const strings = t();
 
-    // Dim background
     ctx.fillStyle = 'rgba(10, 10, 26, 0.85)';
     ctx.fillRect(0, 0, w, h);
 
-    // Title
     ctx.save();
     ctx.shadowColor = '#ffcc00';
     ctx.shadowBlur = 20;
     ctx.fillStyle = '#ffcc00';
     ctx.font = 'bold 36px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('LEVEL UP!', w / 2, 80);
+    ctx.fillText(strings.levelUp, w / 2, 80);
     ctx.restore();
 
     ctx.textAlign = 'center';
     ctx.fillStyle = '#aaaacc';
     ctx.font = '14px monospace';
-    ctx.fillText('Choose an upgrade', w / 2, 110);
+    ctx.fillText(strings.chooseUpgrade, w / 2, 110);
 
-    // Cards — responsive sizing
     const maxCardW = 180;
     const gap = Math.min(20, w * 0.02);
     const cardW = Math.min(maxCardW, (w - gap * 4) / this.currentUpgrades.length);
@@ -118,14 +144,12 @@ export class UIManager {
       const cy = startY;
       const hover = this.isHovering(cx, cy, cardW, cardH);
 
-      // Card background
       ctx.fillStyle = hover ? '#1a1a4a' : '#111133';
       ctx.fillRect(cx, cy, cardW, cardH);
       ctx.strokeStyle = hover ? upg.color : '#333355';
       ctx.lineWidth = hover ? 2 : 1;
       ctx.strokeRect(cx, cy, cardW, cardH);
 
-      // Glow on hover
       if (hover) {
         ctx.save();
         ctx.shadowColor = upg.color;
@@ -134,20 +158,17 @@ export class UIManager {
         ctx.restore();
       }
 
-      // Icon
       const iconSize = Math.max(24, Math.round(36 * cardW / maxCardW));
       ctx.font = `${iconSize}px serif`;
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffffff';
       ctx.fillText(upg.icon, cx + cardW / 2, cy + cardH * 0.28);
 
-      // Name
       ctx.fillStyle = upg.color;
       const nameSize = Math.max(10, Math.round(14 * cardW / maxCardW));
       ctx.font = `bold ${nameSize}px monospace`;
       ctx.fillText(upg.name, cx + cardW / 2, cy + cardH * 0.45);
 
-      // Description
       ctx.fillStyle = '#aaaacc';
       const descSize = Math.max(9, Math.round(11 * cardW / maxCardW));
       ctx.font = `${descSize}px monospace`;
@@ -168,54 +189,45 @@ export class UIManager {
     }
   }
 
-  setReviveHandler(handler: () => void): void {
-    this.onRevive = handler;
-  }
-
-  setShareHandler(handler: (text: string) => void): void {
-    this.onShare = handler;
-  }
-
-  setResumeHandler(handler: () => void): void {
-    this.onResume = handler;
-  }
+  setReviveHandler(handler: () => void): void { this.onRevive = handler; }
+  setShareHandler(handler: (text: string) => void): void { this.onShare = handler; }
+  setResumeHandler(handler: () => void): void { this.onResume = handler; }
 
   drawGameOver(w: number, h: number, player: Player, gameTime: number, victory: boolean): void {
     const ctx = this.ctx;
+    const strings = t();
 
     ctx.fillStyle = 'rgba(10, 10, 26, 0.92)';
     ctx.fillRect(0, 0, w, h);
 
     ctx.textAlign = 'center';
 
-    // Title
     ctx.save();
     ctx.shadowColor = victory ? '#44ff44' : '#ff4444';
     ctx.shadowBlur = 25;
     ctx.fillStyle = victory ? '#44ff44' : '#ff4444';
     ctx.font = 'bold 42px monospace';
-    ctx.fillText(victory ? 'VICTORY!' : 'GAME OVER', w / 2, h / 2 - 100);
+    ctx.fillText(victory ? strings.victory : strings.gameOver, w / 2, h / 2 - 100);
     ctx.restore();
 
-    // Stats
-    ctx.textAlign = 'center';
     ctx.fillStyle = '#ccccdd';
     ctx.font = '16px monospace';
     const min = Math.floor(gameTime / 60);
     const sec = Math.floor(gameTime % 60);
+    const timeStr = `${min}:${sec.toString().padStart(2, '0')}`;
     const stats = [
-      `Time survived: ${min}:${sec.toString().padStart(2, '0')}`,
-      `Level reached: ${player.level}`,
-      `Enemies killed: ${player.kills}`,
-      `Damage dealt: ${Math.round(player.damageDealt)}`,
+      `${strings.timeSurvived} ${timeStr}`,
+      `${strings.levelReached} ${player.level}`,
+      `${strings.enemiesKilled} ${player.kills}`,
+      `${strings.damageDealt} ${Math.round(player.damageDealt)}`,
     ];
     stats.forEach((s, i) => {
       ctx.fillText(s, w / 2, h / 2 - 30 + i * 28);
     });
 
-    // Revive button (only on game over, not victory, and only once)
+    // Revive button
     if (!victory && this.canRevive) {
-      const revW = 240, revH = 44;
+      const revW = 260, revH = 44;
       const revX = w / 2 - revW / 2;
       const revY = h / 2 + 90;
       const revHover = this.isHovering(revX, revY, revW, revH);
@@ -230,7 +242,7 @@ export class UIManager {
       ctx.globalAlpha = pulse;
       ctx.fillStyle = '#ffaa33';
       ctx.font = 'bold 16px monospace';
-      ctx.fillText('▶ WATCH AD — REVIVE', w / 2, revY + 28);
+      ctx.fillText(strings.watchAdRevive, w / 2, revY + 28);
       ctx.globalAlpha = 1;
     }
 
@@ -245,10 +257,9 @@ export class UIManager {
     ctx.strokeStyle = '#00ffff';
     ctx.lineWidth = hover ? 2 : 1;
     ctx.strokeRect(btnX, btnY, btnW, btnH);
-
     ctx.fillStyle = '#00ffff';
     ctx.font = 'bold 18px monospace';
-    ctx.fillText('PLAY AGAIN', w / 2, btnY + 28);
+    ctx.fillText(strings.playAgain, w / 2, btnY + 28);
 
     // Share button
     const shareW = 200, shareH = 38;
@@ -261,18 +272,17 @@ export class UIManager {
     ctx.strokeStyle = '#44ff44';
     ctx.lineWidth = shareHover ? 2 : 1;
     ctx.strokeRect(shareX, shareY, shareW, shareH);
-
     ctx.fillStyle = '#44ff44';
     ctx.font = 'bold 15px monospace';
-    ctx.fillText('📤 SHARE SCORE', w / 2, shareY + 24);
+    ctx.fillText(strings.shareScore, w / 2, shareY + 24);
 
-    // Save share data
-    this.shareData = { kills: player.kills, time: `${min}:${sec.toString().padStart(2, '0')}`, level: player.level, victory };
+    this.shareData = { kills: player.kills, time: timeStr, level: player.level, victory };
   }
 
   drawPaused(w: number, h: number): void {
     const ctx = this.ctx;
     const mobile = w < 600;
+    const strings = t();
 
     ctx.fillStyle = 'rgba(10, 10, 26, 0.8)';
     ctx.fillRect(0, 0, w, h);
@@ -283,18 +293,18 @@ export class UIManager {
     ctx.fillStyle = '#00ffff';
     ctx.font = `bold ${mobile ? 32 : 42}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('PAUSED', w / 2, h / 2 - 30);
+    ctx.fillText(strings.paused, w / 2, h / 2 - 30);
     ctx.restore();
 
     ctx.textAlign = 'center';
     ctx.font = `${mobile ? 14 : 16}px monospace`;
     ctx.fillStyle = '#8888aa';
-    ctx.fillText(mobile ? 'Tap ⏸ to resume' : 'ESC or click ⏸ to resume', w / 2, h / 2 + 10);
+    ctx.fillText(mobile ? strings.tapResume : strings.escResume, w / 2, h / 2 + 10);
 
     if (!mobile) {
       ctx.font = '13px monospace';
       ctx.fillStyle = '#555566';
-      ctx.fillText('MOUSE = aim  |  WASD = move', w / 2, h / 2 + 40);
+      ctx.fillText(strings.aimHintPause, w / 2, h / 2 + 40);
     }
 
     // Resume button
@@ -308,10 +318,9 @@ export class UIManager {
     ctx.strokeStyle = '#00ffff';
     ctx.lineWidth = resHover ? 2 : 1;
     ctx.strokeRect(resBtnX, resBtnY, resBtnW, resBtnH);
-
     ctx.fillStyle = '#00ffff';
     ctx.font = `bold ${mobile ? 14 : 15}px monospace`;
-    ctx.fillText('RESUME', w / 2, resBtnY + 25);
+    ctx.fillText(strings.resume, w / 2, resBtnY + 25);
 
     // Restart button
     const btnW = 180, btnH = 38;
@@ -324,87 +333,81 @@ export class UIManager {
     ctx.strokeStyle = '#ff4444';
     ctx.lineWidth = hover ? 2 : 1;
     ctx.strokeRect(btnX, btnY, btnW, btnH);
-
     ctx.fillStyle = '#ff4444';
     ctx.font = `bold ${mobile ? 14 : 15}px monospace`;
-    ctx.fillText('RESTART', w / 2, btnY + 25);
+    ctx.fillText(strings.restart, w / 2, btnY + 25);
   }
 
   generateUpgrades(player: Player): UpgradeOption[] {
     const options: UpgradeOption[] = [];
-
-    // New weapons the player doesn't have
+    const strings = t();
     const ownedWeapons = new Set(player.weapons.map(w => w.type));
+
     for (const [type, def] of Object.entries(WEAPONS)) {
       if (!ownedWeapons.has(type)) {
+        const loc = strings.weapons[type];
         options.push({
           id: `new_${type}`,
-          name: `NEW: ${def.name}`,
-          description: def.description,
+          name: `${strings.newWeaponPrefix}${loc?.name ?? def.name}`,
+          description: loc?.description ?? def.description,
           icon: def.icon,
           color: def.color,
-          action: () => {
-            player.weapons.push({ type, level: 0, timer: 0 });
-          },
+          action: () => { player.weapons.push({ type, level: 0, timer: 0 }); },
         });
       }
     }
 
-    // Weapon upgrades
     for (const slot of player.weapons) {
       const def = WEAPONS[slot.type];
       if (!def || slot.level >= def.levels.length - 1) continue;
+      const loc = strings.weapons[slot.type];
+      const name = loc?.name ?? def.name;
       options.push({
         id: `up_${slot.type}`,
-        name: `${def.name} LV${slot.level + 2}`,
-        description: `Upgrade ${def.name}`,
+        name: `${name} LV${slot.level + 2}`,
+        description: `${strings.upgradePrefix}${name}`,
         icon: def.icon,
         color: def.color,
         action: () => { slot.level++; },
       });
     }
 
-    // Stat upgrades
-    for (const [key, stat] of Object.entries(STAT_UPGRADES)) {
+    for (const key of Object.keys(STAT_UPGRADES)) {
+      const stat = STAT_UPGRADES[key as keyof typeof STAT_UPGRADES];
       options.push({
         id: `stat_${key}`,
-        name: stat.name,
-        description: `Permanent stat boost`,
+        name: strings.stats[key] ?? stat.name,
+        description: strings.permanentStat,
         icon: stat.icon,
         color: '#88aaff',
-        action: () => {
-          // Applied externally via gameState
-        },
+        action: () => { /* Applied externally via gameState */ },
       });
     }
 
-    // Firing mode upgrades (only if player is still on normal mode)
     if (player.firingMode === 'normal') {
       options.push({
         id: 'mode_shotgun',
-        name: 'Shotgun Mode',
-        description: 'Wide spread, 5 bullets per shot, less damage and range',
+        name: strings.shotgunMode,
+        description: strings.shotgunDesc,
         icon: '💥',
         color: '#ff8844',
         action: () => { player.firingMode = 'shotgun'; },
       });
       options.push({
         id: 'mode_rapid',
-        name: 'Rapid Fire',
-        description: '2x fire rate, faster bullets, smaller size and less damage',
+        name: strings.rapidFire,
+        description: strings.rapidDesc,
         icon: '⚡',
         color: '#ffdd00',
         action: () => { player.firingMode = 'rapid'; },
       });
     }
 
-    // Pick 3 random
     shuffle(options);
     this.currentUpgrades = options.slice(0, 3);
     return this.currentUpgrades;
   }
 
-  // Mouse tracking for hover effects
   private mouseX = 0;
   private mouseY = 0;
 
@@ -421,14 +424,11 @@ export class UIManager {
     return this.mouseX >= x && this.mouseX <= x + w && this.mouseY >= y && this.mouseY <= y + h;
   }
 
-  private onClick = (e: MouseEvent) => {
-    this.handleClick(e.clientX, e.clientY);
-  };
-
+  private onClick = (e: MouseEvent) => { this.handleClick(e.clientX, e.clientY); };
   private onTouch = (e: TouchEvent) => {
     if (e.changedTouches.length > 0) {
-      const t = e.changedTouches[0];
-      this.handleClick(t.clientX, t.clientY);
+      const touch = e.changedTouches[0];
+      this.handleClick(touch.clientX, touch.clientY);
     }
   };
 
@@ -436,7 +436,25 @@ export class UIManager {
     const w = window.innerWidth;
     const h = window.innerHeight;
 
-    // Level up card click (responsive sizing must match drawLevelUp)
+    // Language switcher (only on menu screen)
+    if (this.screen === 'menu') {
+      const s = Math.min(1, w / 700);
+      const btnW = Math.max(32, Math.round(38 * s));
+      const btnH = Math.max(20, Math.round(24 * s));
+      const gap = 4;
+      const totalW = btnW * 2 + gap;
+      const rx = w - totalW - 12;
+      const ry = 12;
+      for (const [i, lang] of (['en', 'ru'] as const).entries()) {
+        const bx = rx + i * (btnW + gap);
+        if (x >= bx && x <= bx + btnW && y >= ry && y <= ry + btnH) {
+          setLocale(lang);
+          return;
+        }
+      }
+    }
+
+    // Level up card click
     if (this.currentUpgrades.length > 0) {
       const maxCardW = 180;
       const gap = Math.min(20, w * 0.02);
@@ -455,11 +473,9 @@ export class UIManager {
       }
     }
 
-    // Pause screen button clicks (Resume + Restart)
+    // Pause screen
     if (this.screen === 'paused') {
       const mobile = w < 600;
-
-      // Resume button
       const resBtnW = 180, resBtnH = 38;
       const resBtnX = w / 2 - resBtnW / 2;
       const resBtnY = h / 2 + (mobile ? 50 : 65);
@@ -467,8 +483,6 @@ export class UIManager {
         if (this.onResume) this.onResume();
         return;
       }
-
-      // Restart button
       const btnW = 180, btnH = 38;
       const btnX = w / 2 - btnW / 2;
       const btnY = resBtnY + resBtnH + 12;
@@ -478,9 +492,9 @@ export class UIManager {
       }
     }
 
-    // Revive button click
+    // Revive button
     if (this.canRevive && this.onRevive) {
-      const revW = 240, revH = 44;
+      const revW = 260, revH = 44;
       const revX = w / 2 - revW / 2;
       const revY = h / 2 + 90;
       if (x >= revX && x <= revX + revW && y >= revY && y <= revY + revH) {
@@ -489,7 +503,7 @@ export class UIManager {
       }
     }
 
-    // Restart button click
+    // Restart button
     const btnW = 200, btnH = 44;
     const btnX = w / 2 - btnW / 2;
     const btnY = this.canRevive ? h / 2 + 150 : h / 2 + 100;
@@ -498,17 +512,17 @@ export class UIManager {
       return;
     }
 
-    // Share button click
+    // Share button
     if (this.shareData && this.onShare) {
       const shareW = 200, shareH = 38;
       const shareX = w / 2 - shareW / 2;
       const shareY = btnY + btnH + 14;
       if (x >= shareX && x <= shareX + shareW && y >= shareY && y <= shareY + shareH) {
         const d = this.shareData;
-        const emoji = d.victory ? '🏆' : '💀';
+        const strings = t();
         const text = d.victory
-          ? `${emoji} I beat Neon Survivors! Level ${d.level}, ${d.kills} kills in ${d.time}! Can you survive? 🚀`
-          : `${emoji} I survived ${d.time} in Neon Survivors! Level ${d.level}, ${d.kills} kills. Can you beat me? 🚀`;
+          ? strings.shareVictory(d.level, d.kills, d.time)
+          : strings.shareDeath(d.level, d.kills, d.time);
         this.onShare(text);
         return;
       }
