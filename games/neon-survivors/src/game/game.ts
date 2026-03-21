@@ -82,6 +82,7 @@ export class NeonSurvivorsScene implements Scene {
     this.ui.setReviveHandler(() => this.revive());
     this.ui.setShareHandler((text) => this.shareScore(text));
     this.ui.setResumeHandler(() => this.resumeGame());
+    this.ui.setMainMenuHandler(() => this.goToMenu());
     this.ui.enableTracking();
   }
 
@@ -315,6 +316,12 @@ export class NeonSurvivorsScene implements Scene {
       this.screen = 'playing';
       this.ads.gameplayStart();
     }
+  }
+
+  private goToMenu(): void {
+    this.ads.gameplayStop();
+    this.screen = 'menu';
+    this.ui.screen = 'menu';
   }
 
   private revive(): void {

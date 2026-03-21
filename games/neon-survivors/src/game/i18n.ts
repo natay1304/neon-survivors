@@ -38,6 +38,7 @@ const STRINGS = {
     aimHintPause:      'MOUSE = aim  |  WASD = move',
     resume:            'RESUME',
     restart:           'RESTART',
+    mainMenu:          'MAIN MENU',
     // HUD
     hpLabel:           'HP',
     enemiesLabel:      'enemies:',
@@ -98,6 +99,7 @@ const STRINGS = {
     aimHintPause:      'МЫШЬ = прицел  |  WASD = движение',
     resume:            'ПРОДОЛЖИТЬ',
     restart:           'ЗАНОВО',
+    mainMenu:          'ГЛАВНОЕ МЕНЮ',
     hpLabel:           'HP',
     enemiesLabel:      'враги:',
     killsLabel:        'убийств:',

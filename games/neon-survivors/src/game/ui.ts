@@ -24,6 +24,7 @@ export class UIManager {
   private onRevive: (() => void) | null = null;
   private onShare: ((text: string) => void) | null = null;
   private onResume: (() => void) | null = null;
+  private onMainMenu: (() => void) | null = null;
   private shareData: { kills: number; time: string; level: number; victory: boolean } | null = null;
 
   constructor(
@@ -192,6 +193,7 @@ export class UIManager {
   setReviveHandler(handler: () => void): void { this.onRevive = handler; }
   setShareHandler(handler: (text: string) => void): void { this.onShare = handler; }
   setResumeHandler(handler: () => void): void { this.onResume = handler; }
+  setMainMenuHandler(handler: () => void): void { this.onMainMenu = handler; }
 
   drawGameOver(w: number, h: number, player: Player, gameTime: number, victory: boolean): void {
     const ctx = this.ctx;
@@ -336,6 +338,21 @@ export class UIManager {
     ctx.fillStyle = '#ff4444';
     ctx.font = `bold ${mobile ? 14 : 15}px monospace`;
     ctx.fillText(strings.restart, w / 2, btnY + 25);
+
+    // Main menu button
+    const menuW = 180, menuH = 38;
+    const menuX = w / 2 - menuW / 2;
+    const menuY = btnY + btnH + 12;
+    const menuHover = this.isHovering(menuX, menuY, menuW, menuH);
+
+    ctx.fillStyle = menuHover ? '#1a1a1a' : '#111111';
+    ctx.fillRect(menuX, menuY, menuW, menuH);
+    ctx.strokeStyle = '#666688';
+    ctx.lineWidth = menuHover ? 2 : 1;
+    ctx.strokeRect(menuX, menuY, menuW, menuH);
+    ctx.fillStyle = '#888899';
+    ctx.font = `bold ${mobile ? 14 : 15}px monospace`;
+    ctx.fillText(strings.mainMenu, w / 2, menuY + 25);
   }
 
   generateUpgrades(player: Player): UpgradeOption[] {
@@ -488,6 +505,13 @@ export class UIManager {
       const btnY = resBtnY + resBtnH + 12;
       if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
         this.onRestart();
+        return;
+      }
+      const menuW = 180, menuH = 38;
+      const menuX = w / 2 - menuW / 2;
+      const menuY = btnY + btnH + 12;
+      if (x >= menuX && x <= menuX + menuW && y >= menuY && y <= menuY + menuH) {
+        if (this.onMainMenu) this.onMainMenu();
         return;
       }
     }
