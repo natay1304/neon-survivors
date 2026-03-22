@@ -73,53 +73,6 @@ function aggroCooldown(key: string, baseSec: number, node: BehaviorNode): Behavi
   };
 }
 
-// ─── Random-interval cooldown ──────────────────────────────────────────
-/**
- * Like aggroCooldown but picks a random interval between minSec and maxSec
- * each time it fires. Scales with aggression like aggroCooldown.
- */
-function randomCooldown(key: string, minSec: number, maxSec: number, node: BehaviorNode): BehaviorNode {
-  const bbKey = `__rcd_${key}`;
-  const intKey = `__rcd_int_${key}`;
-  const runKey = `__rcd_run_${key}`;
-  return (ctx: BTContext): BehaviorStatus => {
-    if (ctx.blackboard.get<boolean>(runKey, false)) {
-      const result = node(ctx);
-      if (result !== 'running') ctx.blackboard.delete(runKey);
-      return result;
-    }
-
-    const last = ctx.blackboard.get<number>(bbKey, -Infinity);
-    const now = ctx.blackboard.get<number>('__time', 0);
-    const aggro = ctx.blackboard.get<number>('__aggression', 1);
-    const interval = ctx.blackboard.get<number>(intKey, minSec + Math.random() * (maxSec - minSec));
-    const seconds = interval / Math.max(1, aggro);
-    if (now - last < seconds) return 'failure';
-    ctx.blackboard.set(bbKey, now);
-    // Pick new random interval for next shot
-    ctx.blackboard.set(intKey, minSec + Math.random() * (maxSec - minSec));
-    const result = node(ctx);
-    if (result === 'running') ctx.blackboard.set(runKey, true);
-    return result;
-  };
-}
-
-// ─── Shoot action (sets blackboard flag for system to spawn projectile) ──
-function shoot(): BehaviorNode {
-  return (ctx: BTContext): BehaviorStatus => {
-    const target = playerTarget(ctx);
-    if (!target) return 'failure';
-    const pos = ctx.world.get<{ x: number; y: number }>(ctx.entity, 'pos');
-    const dx = target.x - pos.x;
-    const dy = target.y - pos.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len === 0) return 'failure';
-    ctx.blackboard.set('__shoot', true);
-    ctx.blackboard.set('__shootDirX', dx / len);
-    ctx.blackboard.set('__shootDirY', dy / len);
-    return 'success';
-  };
-}
 
 // ─── Zombie — Shambling zigzag ────────────────────────────────────────
 // Weaves drunkenly as it advances. Relentless, inevitable approach.
@@ -255,29 +208,44 @@ export const demonTree: BehaviorNode = selector(
 );
 
 // ─── Warlock — Ranged caster ──────────────────────────────────────────
-// Maintains distance, orbits the player while constantly launching projectiles.
-// Blinks away if the player gets too close. Shoots at any distance.
-export const warlockTree: BehaviorNode = selector(
-  // Always try to shoot (any distance) with random 1.0-1.5s cooldown
-  randomCooldown('warlock_shot', 1.0, 1.5, sequence(
-    wait(0.15, 'warlock_cast'),
-    shoot(),
-  )),
-  // Too close: blink away (fast backwards dash)
+// Shoots at the player while moving. Shooting is independent of movement.
+export const warlockTree: BehaviorNode = (ctx: BTContext): BehaviorStatus => {
+  // Always try to shoot when within 500px
+  const target = playerTarget(ctx);
+  if (target) {
+    const pos = ctx.world.get<{ x: number; y: number }>(ctx.entity, 'pos');
+    const ddx = target.x - pos.x;
+    const ddy = target.y - pos.y;
+    const dist = Math.sqrt(ddx * ddx + ddy * ddy);
+    if (dist < 500 && dist > 0) {
+      const now = ctx.blackboard.get<number>('__time', 0);
+      const lastShot = ctx.blackboard.get<number>('__wlk_last', -10);
+      const aggro = ctx.blackboard.get<number>('__aggression', 1);
+      const cd = ctx.blackboard.get<number>('__wlk_cd', 1.5);
+      if (now - lastShot >= cd / Math.max(1, aggro)) {
+        ctx.blackboard.set('__shoot', true);
+        ctx.blackboard.set('__shootDirX', ddx / dist);
+        ctx.blackboard.set('__shootDirY', ddy / dist);
+        ctx.blackboard.set('__wlk_last', now);
+        ctx.blackboard.set('__wlk_cd', 1.0 + Math.random() * 1.5);
+      }
+    }
+  }
+  // Movement (always runs)
+  return warlockMove(ctx);
+};
+
+const warlockMove: BehaviorNode = selector(
   sequence(
     checkDistance(playerTarget, '<', 150),
-    aggroCooldown('warlock_blink', 3.0, sequence(
-      dash(4.0, 0.2, 'warlock_blink'),
-    )),
+    aggroCooldown('warlock_blink', 3.0, dash(4.0, 0.2, 'warlock_blink')),
     flee(playerTarget),
   ),
-  // Optimal range: orbit
   sequence(
     checkDistance(playerTarget, '<', 450),
     checkDistance(playerTarget, '>', 150),
-    orbit(playerTarget, 300, 1.0),
+    orbit(playerTarget, 280, 1.2),
   ),
-  // Too far: close distance
   seek(playerTarget),
 );
 

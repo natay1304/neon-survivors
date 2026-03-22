@@ -7,10 +7,17 @@ const STRINGS = {
     // Menu
     subtitle:          'Survive the swarm. Grow stronger.',
     tapToStart:        'TAP or PRESS ANY KEY',
+    play:              'PLAY',
     moveLeft:          'Left joystick = move',
     aimLeft:           'Right joystick = aim & shoot',
     movePC:            'WASD / Arrows = move',
     aimPC:             'Mouse = aim & shoot  |  ESC = pause',
+    // Mode selection
+    modeClassic:       'CLASSIC (10 MIN)',
+    modeEndless:       'ENDLESS SURVIVAL',
+    modeClassicDesc:   'Survive 10 minutes to win. NG+ after victory.',
+    modeEndlessDesc:   'No timer. Play until you die.',
+    nextRun:           'Next run:',
     // Level up
     levelUp:           'LEVEL UP!',
     chooseUpgrade:     'Choose an upgrade',
@@ -71,10 +78,18 @@ const STRINGS = {
   ru: {
     subtitle:          'Выживи среди орды. Стань сильнее.',
     tapToStart:        'НАЖМИТЕ ЛЮБУЮ КЛАВИШУ',
+    play:              'ИГРАТЬ',
     moveLeft:          'Левый джойстик = движение',
     aimLeft:           'Правый джойстик = прицел и стрельба',
     movePC:            'WASD / Стрелки = движение',
     aimPC:             'Мышь = прицел и стрельба  |  ESC = пауза',
+    // Mode selection
+    modeClassic:       'КЛАССИКА (10 МИН)',
+    modeEndless:       'БЕСКОНЕЧНОЕ ВЫЖИВАНИЕ',
+    modeClassicDesc:   'Выживи 10 минут для победы. NG+ после победы.',
+    modeEndlessDesc:   'Без таймера. Играй пока не погибнешь.',
+    nextRun:           'Следующий забег:',
+    // Level up
     levelUp:           'НОВЫЙ УРОВЕНЬ!',
     chooseUpgrade:     'Выберите улучшение',
     newWeaponPrefix:   'НОВОЕ: ',

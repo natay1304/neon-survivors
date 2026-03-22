@@ -19,6 +19,41 @@ interface CrazyGamesSDK {
   };
 }
 
+interface YandexLeaderboards {
+  getLeaderboardDescription(name: string): Promise<{ name: string }>;
+  setLeaderboardScore(name: string, score: number): Promise<void>;
+  getLeaderboardEntries(name: string, options?: {
+    quantityTop?: number;
+    quantityAround?: number;
+    includeUser?: boolean;
+  }): Promise<{
+    leaderboard: { name: string };
+    entries: Array<{
+      score: number;
+      rank: number;
+      player: {
+        uniqueID: string;
+        publicName: string;
+        lang: string;
+        scopePermissions: { avatar: string; public_name: string };
+        getAvatarSrc(size: 'small' | 'medium' | 'large'): string;
+      };
+      formattedScore: string;
+    }>;
+    userRank: number;
+    ranges: Array<{ start: number; size: number }>;
+  }>;
+}
+
+interface YandexPlayer {
+  getUniqueID(): string;
+  getName(): string;
+  setData(data: Record<string, unknown>, flush?: boolean): Promise<void>;
+  getData(keys?: string[]): Promise<Record<string, unknown>>;
+  setStats(stats: Record<string, number>): Promise<void>;
+  getStats(keys?: string[]): Promise<Record<string, number>>;
+}
+
 interface YandexSDK {
   adv: {
     showFullscreenAdv(params: {
@@ -40,6 +75,11 @@ interface YandexSDK {
       stop(): void;
     };
   };
+  environment: {
+    i18n: { lang: string; tld: string };
+  };
+  getLeaderboards(): Promise<YandexLeaderboards>;
+  getPlayer(options?: { scopes?: boolean; signed?: boolean }): Promise<YandexPlayer>;
 }
 
 interface AdsgramController {

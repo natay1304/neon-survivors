@@ -20,6 +20,8 @@ export const C = {
   BehaviorTree: 'bt',
   EnemyProjectile: 'eproj',
   EnemySpin: 'espin',
+  WaveSwarm: 'wswarm',
+  CircleMember: 'cmember',
 } as const;
 
 // Component data interfaces
@@ -29,7 +31,7 @@ export interface Health { current: number; max: number; invuln: number; }
 export interface Collider { radius: number; }
 
 export interface Visual {
-  shape: 'circle' | 'triangle' | 'diamond' | 'square' | 'hexagon' | 'rocket' | 'spike' | 'star4' | 'flame';
+  shape: 'circle' | 'triangle' | 'diamond' | 'square' | 'hexagon' | 'rocket' | 'spike' | 'star4' | 'flame' | 'bullet';
   color: string;
   size: number;
   glow?: string;
@@ -126,4 +128,23 @@ export interface EnemySpin {
   direction: number;     // 1 or -1
   flipTimer: number;     // countdown to next direction change
   flipInterval: number;  // base seconds between direction changes
+}
+
+/** Wave swarm member — flies in a straight line, ignores normal AI */
+export interface WaveSwarmMember {
+  dirX: number;          // normalized direction
+  dirY: number;
+  speed: number;
+  lifetime: number;      // despawn timer
+}
+
+/** Closing circle member — orbits and shrinks toward center */
+export interface CircleMember {
+  centerX: number;       // center of circle (player pos at spawn)
+  centerY: number;
+  angle: number;         // current angle on circle
+  radius: number;        // current orbit radius
+  shrinkRate: number;    // px/s radius decrease
+  rotSpeed: number;      // rad/s
+  lifetime: number;      // despawn timer (vanish before fully closing)
 }

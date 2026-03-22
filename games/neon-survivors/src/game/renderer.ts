@@ -2,18 +2,77 @@
 
 import { World, Entity, Camera2D, ParticleSystem, FloatingTextManager, TWO_PI, clamp } from '@survivors/core';
 import { C, Pos, Health, Visual, Player, LightningData, Bonus } from './components';
-import { WEAPONS, GAME_DURATION, STAT_UPGRADES } from './config';
+import { WEAPONS, GAME_DURATION, STAT_UPGRADES, type GameMode } from './config';
 import { t } from './i18n';
 import { drawParticles, drawFloatingText, applyCameraToContext } from './canvas-helpers';
 
 const GRID_SIZE = 64;
 const BG_COLOR = '#0a0a1a';
 
+// Simple seeded PRNG (mulberry32) for deterministic star/planet placement
+function seededRng(seed: number): () => number {
+  let s = seed | 0;
+  return () => {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Shared star/planet data — generated once, reused across renderer instances
+let _sharedStars: { x: number; y: number; s: number; a: number }[][] | null = null;
+let _sharedPlanets: { x: number; y: number; radius: number; color: string; ringColor: string | null; highlight: string }[] | null = null;
+
+function getSharedStars(): { x: number; y: number; s: number; a: number }[][] {
+  if (_sharedStars) return _sharedStars;
+  const rng = seededRng(42);
+  const layers: { x: number; y: number; s: number; a: number }[][] = [[], [], []];
+  for (let i = 0; i < 70; i++) {
+    layers[0].push({ x: rng() * 800, y: rng() * 800, s: 1.5 + rng() * 1.5, a: 0.4 + rng() * 0.3 });
+  }
+  for (let i = 0; i < 50; i++) {
+    layers[1].push({ x: rng() * 800, y: rng() * 800, s: 2 + rng() * 2.5, a: 0.5 + rng() * 0.4 });
+  }
+  for (let i = 0; i < 30; i++) {
+    layers[2].push({ x: rng() * 800, y: rng() * 800, s: 3 + rng() * 3, a: 0.6 + rng() * 0.4 });
+  }
+  _sharedStars = layers;
+  return layers;
+}
+
+type PlanetData = { x: number; y: number; radius: number; color: string; ringColor: string | null; highlight: string };
+
+function getSharedPlanets(): PlanetData[] {
+  if (_sharedPlanets) return _sharedPlanets;
+  const rng = seededRng(123);
+  const planetColors = [
+    { color: '#334466', highlight: '#5577aa', ring: '#667799' as string | null },
+    { color: '#553344', highlight: '#885566', ring: null as string | null },
+    { color: '#335544', highlight: '#558866', ring: '#447755' as string | null },
+    { color: '#444466', highlight: '#7777aa', ring: null as string | null },
+    { color: '#553322', highlight: '#886644', ring: '#775533' as string | null },
+    { color: '#223355', highlight: '#4466aa', ring: null as string | null },
+  ];
+  const planets: PlanetData[] = [];
+  for (let i = 0; i < 6; i++) {
+    const pc = planetColors[i % planetColors.length];
+    planets.push({
+      x: 100 + rng() * 1800, y: 100 + rng() * 1800,
+      radius: 25 + rng() * 55,
+      color: pc.color, highlight: pc.highlight, ringColor: pc.ring,
+    });
+  }
+  _sharedPlanets = planets;
+  return planets;
+}
+
 export class GameRenderer {
-  private starLayers: { x: number; y: number; s: number; a: number }[][] = [[], [], []];
-  private planets: { x: number; y: number; radius: number; color: string; ringColor: string | null; highlight: string }[] = [];
+  private starLayers: { x: number; y: number; s: number; a: number }[][];
+  private planets: { x: number; y: number; radius: number; color: string; ringColor: string | null; highlight: string }[];
   private now = 0;
   private entityBuf: { e: Entity; pos: Pos; vis: Visual; y: number }[] = [];
+  gameMode: GameMode = 'classic';
 
   constructor(
     private ctx: CanvasRenderingContext2D,
@@ -21,46 +80,8 @@ export class GameRenderer {
     private particles: ParticleSystem,
     private floatingText: FloatingTextManager,
   ) {
-    // Generate parallax dot layers
-    for (let i = 0; i < 70; i++) {
-      this.starLayers[0].push({
-        x: Math.random() * 800, y: Math.random() * 800,
-        s: 1.5 + Math.random() * 1.5, a: 0.4 + Math.random() * 0.3,
-      });
-    }
-    for (let i = 0; i < 50; i++) {
-      this.starLayers[1].push({
-        x: Math.random() * 800, y: Math.random() * 800,
-        s: 2 + Math.random() * 2.5, a: 0.5 + Math.random() * 0.4,
-      });
-    }
-    for (let i = 0; i < 30; i++) {
-      this.starLayers[2].push({
-        x: Math.random() * 800, y: Math.random() * 800,
-        s: 3 + Math.random() * 3, a: 0.6 + Math.random() * 0.4,
-      });
-    }
-
-    // Generate background planets (large tile, very slow parallax)
-    const planetColors = [
-      { color: '#334466', highlight: '#5577aa', ring: '#667799' },
-      { color: '#553344', highlight: '#885566', ring: null },
-      { color: '#335544', highlight: '#558866', ring: '#447755' },
-      { color: '#444466', highlight: '#7777aa', ring: null },
-      { color: '#553322', highlight: '#886644', ring: '#775533' },
-      { color: '#223355', highlight: '#4466aa', ring: null },
-    ];
-    for (let i = 0; i < 6; i++) {
-      const pc = planetColors[i % planetColors.length];
-      this.planets.push({
-        x: 100 + Math.random() * 1800,
-        y: 100 + Math.random() * 1800,
-        radius: 25 + Math.random() * 55,
-        color: pc.color,
-        highlight: pc.highlight,
-        ringColor: pc.ring,
-      });
-    }
+    this.starLayers = getSharedStars();
+    this.planets = getSharedPlanets();
   }
 
   render(world: World, gameTime: number, _state: string): void {
@@ -493,6 +514,11 @@ export class GameRenderer {
         ctx.closePath();
         break;
       }
+      case 'bullet': {
+        // Elongated oval / pill shape — stretched along Y axis
+        ctx.ellipse(0, 0, size * 0.45, size, 0, 0, TWO_PI);
+        break;
+      }
       case 'star4': {
         // Angular claw / shuriken — 3 sharp prongs
         ctx.moveTo(0, -size * 1.15);
@@ -519,9 +545,9 @@ export class GameRenderer {
     const hp = world.get<Health>(players[0], C.Health);
 
     // Timer (top center)
-    const remaining = Math.max(0, GAME_DURATION - gameTime);
-    const min = Math.floor(remaining / 60);
-    const sec = Math.floor(remaining % 60);
+    const timerValue = this.gameMode === 'endless' ? gameTime : Math.max(0, GAME_DURATION - gameTime);
+    const min = Math.floor(timerValue / 60);
+    const sec = Math.floor(timerValue % 60);
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 24px monospace';
     ctx.textAlign = 'center';

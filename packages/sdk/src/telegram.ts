@@ -67,4 +67,9 @@ export class TelegramPlatform implements AdPlatform {
   happytime(): void {
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
   }
+  getLanguage() { return null; }
+  async savePlayerData() {}
+  async loadPlayerData() { return null; }
+  async setLeaderboardScore() {}
+  async getLeaderboardEntries() { return []; }
 }

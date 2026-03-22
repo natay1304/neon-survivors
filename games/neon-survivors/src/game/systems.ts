@@ -1,8 +1,8 @@
 /** All game systems — pure functions operating on the ECS world */
 
 import { Vec2, randomAngle, randomRange, clamp, World, Entity, InputManager, SpatialHash, ParticleSystem, FloatingTextManager, Blackboard, type BTContext } from '@survivors/core';
-import { C, Pos, Vel, Health, Collider, Player, Enemy, Projectile, XPGem, Visual, LightningData, Bonus, type BehaviorTreeData, type EnemyProjectile, type EnemySpin } from './components';
-import { WEAPONS, ENEMIES, ENEMY_SPAWN_DISTANCE, MAX_ENEMIES, GAME_DURATION, BOSS_TIMES, MINIBOSS_TIMES } from './config';
+import { C, Pos, Vel, Health, Collider, Player, Enemy, Projectile, XPGem, Visual, LightningData, Bonus, type BehaviorTreeData, type EnemyProjectile, type EnemySpin, type WaveSwarmMember, type CircleMember } from './components';
+import { WEAPONS, ENEMIES, ENEMY_SPAWN_DISTANCE, MAX_ENEMIES, MAX_ENEMIES_ENDLESS, GAME_DURATION, BOSS_TIMES, MINIBOSS_TIMES, NG_PLUS, type GameMode } from './config';
 import { ENEMY_TREES, simpleLODTree } from './enemy-behaviors';
 
 const FIRE_COLORS = ['#ff6600', '#ff8822', '#ffaa00', '#ff4400', '#ffcc33'];
@@ -88,9 +88,11 @@ export function createBTEnemySystem(spatialHash: SpatialHash<Entity>) {
       if (distSq > LOD_MED_SQ && (e + frame) % 2 !== 0) continue;
 
       // LOD tree selection: distant enemies use simple seek
+      // Ranged enemies (warlock) always use full tree so they can shoot at range
       const fullTree = ENEMY_TREES[enemy.type];
       if (!fullTree) continue;
-      const tree = distSq > LOD_CLOSE_SQ ? simpleLODTree : fullTree;
+      const isRanged = enemy.type === 'warlock';
+      const tree = (!isRanged && distSq > LOD_CLOSE_SQ) ? simpleLODTree : fullTree;
 
       // Set shared blackboard values for this tick
       const bb = btData.blackboard;
@@ -104,22 +106,23 @@ export function createBTEnemySystem(spatialHash: SpatialHash<Entity>) {
       const ctx: BTContext = { entity: e, world, dt, blackboard: bb };
       tree(ctx);
 
-      // Handle shooting flag (set by warlock / ranged enemies)
+      // Handle shooting flag (set by warlock BT)
       if (bb.get<boolean>('__shoot', false)) {
         bb.delete('__shoot');
         const sdx = bb.get<number>('__shootDirX', 0);
         const sdy = bb.get<number>('__shootDirY', 0);
         if (sdx !== 0 || sdy !== 0) {
           const projSpeed = 180 + aggression * 20;
-          const projDmg = enemy.damage * 0.6;
+          const projDmg = enemy.damage * 0.7;
           const ep = world.spawn();
-          world.add(ep, C.Pos, { x: pos.x + sdx * 20, y: pos.y + sdy * 20 });
+          world.add(ep, C.Pos, { x: pos.x + sdx * 18, y: pos.y + sdy * 18 });
           world.add(ep, C.Vel, { x: sdx * projSpeed, y: sdy * projSpeed });
-          world.add(ep, C.EnemyProjectile, { damage: projDmg, lifetime: 3.5 } as EnemyProjectile);
-          world.add(ep, C.Collider, { radius: 6 });
+          world.add(ep, C.EnemyProjectile, { damage: projDmg, lifetime: 5.0 } as EnemyProjectile);
+          world.add(ep, C.Collider, { radius: 3 });
           world.add(ep, C.Visual, {
-            shape: 'diamond', color: '#ffdd44', size: 7,
-            rotation: 0,
+            shape: 'bullet', color: '#ffee00', size: 3,
+            glow: '', glowSize: 0,
+            rotation: Math.atan2(sdy, sdx) + Math.PI / 2,
           } as Visual);
         }
       }
@@ -181,7 +184,7 @@ export function createWeaponSystem(
   particles: ParticleSystem,
   floatingText: FloatingTextManager,
   spatialHash: SpatialHash<Entity>,
-  gameState: { damageMult: number; cooldownMult: number; gameTime: number }
+  gameState: { damageMult: number; cooldownMult: number; gameTime: number; onSfx?: (id: string) => void }
 ) {
   const seen = new Set<Entity>();
   const slowEffects: { entity: Entity; speed: number; timer: number }[] = [];
@@ -219,6 +222,7 @@ export function createWeaponSystem(
           continue;
         }
         slot.timer = lvl.cooldown * (1 - gameState.cooldownMult);
+        gameState.onSfx?.('shoot');
 
         switch (slot.type) {
           case 'magic_orb': {
@@ -254,7 +258,7 @@ export function createWeaponSystem(
             for (let i = 0; i < count; i++) {
               const angle = baseAngle + (i - (count - 1) / 2) * spread;
               const proj = world.spawn();
-              const projSize = lvl.size * sizeMult;
+              const projSize = lvl.size * sizeMult * 0.7;
               world.add(proj, C.Pos, { x: pPos.x, y: pPos.y });
               world.add(proj, C.Vel, { x: Math.cos(angle) * lvl.speed * speedMult, y: Math.sin(angle) * lvl.speed * speedMult });
               world.add(proj, C.Projectile, {
@@ -308,6 +312,7 @@ export function createWeaponSystem(
               const dx = ePos.x - pPos.x, dy = ePos.y - pPos.y;
               if (dx * dx + dy * dy <= lvl.size * lvl.size) validTargets.push(candidate);
             }
+            if (validTargets.length > 0) gameState.onSfx?.('lightning');
             for (let i = 0; i < Math.min(lvl.count, validTargets.length); i++) {
               const idx = Math.floor(Math.random() * (validTargets.length - i)) + i;
               // Swap selected target to front (swap-and-pop avoids splice O(n))
@@ -349,6 +354,7 @@ export function createWeaponSystem(
               enemy.speed *= 0.3;
               slowEffects.push({ entity: candidate, speed: baseSpeed, timer: 2.0 });
             }
+            gameState.onSfx?.('frost_nova');
             particles.emit(pPos.x, pPos.y, 24, { color: wDef.color, speed: lvl.size * 2, life: 0.4, size: 5, sizeEnd: 1 });
             break;
           }
@@ -405,7 +411,8 @@ export function createProjectileSystem() {
 export function createCollisionSystem(
   spatialHash: SpatialHash<Entity>,
   particles: ParticleSystem,
-  floatingText: FloatingTextManager
+  floatingText: FloatingTextManager,
+  onSfx?: (id: string) => void,
 ) {
   const seen = new Set<Entity>();
 
@@ -474,6 +481,7 @@ export function createCollisionSystem(
           playerHp.invuln = 0.5;
           floatingText.add(playerPos.x, playerPos.y - 20, `-${dmg}`, '#ffdd44', 0.8, 20);
           particles.emit(playerPos.x, playerPos.y, 6, { color: '#ffaa00', speed: 100, life: 0.3 });
+          onSfx?.('player_hit');
         }
         world.destroy(ep);
       }
@@ -498,6 +506,7 @@ export function createCollisionSystem(
         playerHp.invuln = 0.8;
         floatingText.add(playerPos.x, playerPos.y - 20, `-${dmg}`, '#ff4444', 0.8, 20);
         particles.emit(playerPos.x, playerPos.y, 6, { color: '#ff4444', speed: 100, life: 0.3 });
+        onSfx?.('player_hit');
         break; // Only take damage from one enemy per frame
       }
     }
@@ -516,11 +525,11 @@ export function createEnemyProjectileSystem() {
         world.destroy(e);
         continue;
       }
-      // Spin the visual for flair
+      // Pulse the visual for visibility
       const vis = world.maybe<Visual>(e, C.Visual);
       if (vis) {
-        vis.rotation = (vis.rotation ?? 0) + dt * 8;
-        vis.size = 7 + Math.sin(elapsed * 12) * 2;
+        vis.rotation = (vis.rotation ?? 0) + dt * 10;
+        vis.size = 3 + Math.sin(elapsed * 14) * 0.5;
       }
     }
   };
@@ -547,7 +556,7 @@ export function createEnemySpinSystem() {
 }
 
 // ─── PICKUP SYSTEM ───────────────────────────────────────────────────
-export function createPickupSystem(particles: ParticleSystem, floatingText: FloatingTextManager) {
+export function createPickupSystem(particles: ParticleSystem, floatingText: FloatingTextManager, onSfx?: (id: string) => void) {
   return (world: World, dt: number) => {
     const players = world.query(C.Player, C.Pos);
     if (players.length === 0) return;
@@ -581,6 +590,7 @@ export function createPickupSystem(particles: ParticleSystem, floatingText: Floa
         player.xp += gem.value;
         floatingText.add(gPos.x, gPos.y - 10, `+${gem.value} XP`, '#44ff88', 0.5, 12);
         particles.emit(gPos.x, gPos.y, 4, { color: '#44ff44', speed: 60, life: 0.2, size: 3 });
+        onSfx?.('xp_pickup');
         world.destroy(e);
       }
     }
@@ -589,7 +599,7 @@ export function createPickupSystem(particles: ParticleSystem, floatingText: Floa
 
 // ─── WAVE SYSTEM ─────────────────────────────────────────────────────
 export function createWaveSystem(
-  gameState: { gameTime: number; bossSpawned: Set<number>; minibossSpawned: Set<number>; enemySpinEnabled?: boolean }
+  gameState: { gameTime: number; bossSpawned: Set<number>; minibossSpawned: Set<number>; enemySpinEnabled?: boolean; ngPlusLevel: number; gameMode: GameMode }
 ) {
   let spawnAccumulator = 0;
 
@@ -601,34 +611,51 @@ export function createWaveSystem(
     const time = gameState.gameTime;
     const enemyCount = world.count(C.Enemy);
     const spin = gameState.enemySpinEnabled !== false;
+    const ng = gameState.ngPlusLevel;
 
-    // Boss spawns
+    // Boss spawns (fixed schedule)
     for (const bt of BOSS_TIMES) {
       if (time >= bt && !gameState.bossSpawned.has(bt)) {
         gameState.bossSpawned.add(bt);
-        spawnEnemy(world, pPos, 'boss', time, playerLevel, spin);
+        spawnEnemy(world, pPos, 'boss', time, playerLevel, spin, ng);
       }
     }
     for (const mt of MINIBOSS_TIMES) {
       if (time >= mt && !gameState.minibossSpawned.has(mt)) {
         gameState.minibossSpawned.add(mt);
-        spawnEnemy(world, pPos, 'miniboss', time, playerLevel, spin);
+        spawnEnemy(world, pPos, 'miniboss', time, playerLevel, spin, ng);
+      }
+    }
+
+    // Endless mode: repeating bosses beyond GAME_DURATION
+    if (gameState.gameMode === 'endless' && time > GAME_DURATION) {
+      const bossInterval = 120;
+      const bossSlot = Math.floor(time / bossInterval) * bossInterval;
+      if (bossSlot > GAME_DURATION && !gameState.bossSpawned.has(bossSlot)) {
+        gameState.bossSpawned.add(bossSlot);
+        spawnEnemy(world, pPos, 'boss', time, playerLevel, spin, ng);
+      }
+      const mbInterval = 60;
+      const mbSlot = Math.floor(time / mbInterval) * mbInterval;
+      if (mbSlot > GAME_DURATION && !gameState.minibossSpawned.has(mbSlot)) {
+        gameState.minibossSpawned.add(mbSlot);
+        spawnEnemy(world, pPos, 'miniboss', time, playerLevel, spin, ng);
       }
     }
 
     // Regular spawns
-    if (enemyCount >= MAX_ENEMIES) return;
+    const maxEnemies = gameState.gameMode === 'endless' ? MAX_ENEMIES_ENDLESS : MAX_ENEMIES;
+    if (enemyCount >= maxEnemies) return;
 
-    const t = time / GAME_DURATION; // 0..1
-    // Base ramp + surge in final 30%: ~0.5 early → ~8 at end
-    const spawnRate = 0.5 + time / 60 * 0.7 + Math.max(0, t - 0.7) * 15;
+    const t = time / GAME_DURATION; // 0..1 in classic, grows beyond 1 in endless
+    const ngSpawnMult = 1 + ng * NG_PLUS.spawnRateMult;
+    const spawnRate = (0.8 + time / 45 * 1.0 + Math.max(0, t - 0.5) * 14) * ngSpawnMult;
     spawnAccumulator += spawnRate * dt;
 
     while (spawnAccumulator >= 1) {
       spawnAccumulator -= 1;
-      if (world.count(C.Enemy) >= MAX_ENEMIES) break;
+      if (world.count(C.Enemy) >= maxEnemies) break;
 
-      // Pick random enemy type based on weights and unlock time
       const available = Object.entries(ENEMIES).filter(
         ([_, def]) => !def.isBoss && def.unlockTime <= time
       );
@@ -640,12 +667,12 @@ export function createWaveSystem(
         if (roll <= 0) { chosenType = type; break; }
       }
 
-      spawnEnemy(world, pPos, chosenType, time, playerLevel, spin);
+      spawnEnemy(world, pPos, chosenType, time, playerLevel, spin, ng);
     }
   };
 }
 
-export function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime: number, playerLevel: number = 1, enableSpin = true): void {
+export function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime: number, playerLevel: number = 1, enableSpin = true, ngPlusLevel = 0): void {
   const def = ENEMIES[type];
   if (!def) return;
 
@@ -656,11 +683,14 @@ export function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime:
   const y = playerPos.y + Math.sin(angle) * dist;
 
   // Scale stats with time — accelerates sharply in final minutes
-  const t = gameTime / GAME_DURATION; // 0..1
+  const t = gameTime / GAME_DURATION; // 0..1 in classic, grows beyond 1 in endless
   const levelScale = 1 + playerLevel * 0.03; // +3% per player level
-  const hpMult  = (1 + t * 1.5 + Math.max(0, t - 0.6) * 2.0) * levelScale;
-  const dmgMult = (1 + t * 1.5 + Math.max(0, t - 0.5) * 1.5) * levelScale;
-  const spdMult = (1 + t * 0.4 + Math.max(0, t - 0.5) * 0.6) * (1 + playerLevel * 0.01);
+  const ngHp  = 1 + ngPlusLevel * NG_PLUS.hpMult;
+  const ngDmg = 1 + ngPlusLevel * NG_PLUS.damageMult;
+  const ngSpd = 1 + ngPlusLevel * NG_PLUS.speedMult;
+  const hpMult  = (1 + t * 1.5 + Math.max(0, t - 0.6) * 2.0) * levelScale * ngHp;
+  const dmgMult = (1 + t * 1.5 + Math.max(0, t - 0.5) * 1.5) * levelScale * ngDmg;
+  const spdMult = (1 + t * 0.4 + Math.max(0, t - 0.5) * 0.6) * (1 + playerLevel * 0.01) * ngSpd;
 
   const e = world.spawn();
   world.add(e, C.Pos, { x, y });
@@ -696,7 +726,7 @@ export function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime:
 }
 
 // ─── DEATH SYSTEM ────────────────────────────────────────────────────
-export function createDeathSystem(particles: ParticleSystem) {
+export function createDeathSystem(particles: ParticleSystem, onSfx?: (id: string) => void) {
   return (world: World, dt: number) => {
     for (const e of world.query(C.Health, C.Pos)) {
       const hp = world.get<Health>(e, C.Health);
@@ -737,6 +767,7 @@ export function createDeathSystem(particles: ParticleSystem) {
           sizeEnd: 0,
         });
 
+        onSfx?.('enemy_death');
         world.destroy(e);
       }
     }
@@ -836,6 +867,7 @@ export function createBonusPickupSystem(
   particles: ParticleSystem,
   floatingText: FloatingTextManager,
   spatialHash: SpatialHash<Entity>,
+  onSfx?: (id: string) => void,
 ) {
   let bombTickTimer = 0;
   const seen = new Set<Entity>();
@@ -934,6 +966,7 @@ export function createBonusPickupSystem(
         const [text, color] = labels[bonus.type] ?? ['BUFF!', '#ffffff'];
         floatingText.add(bPos.x, bPos.y - 10, text, color, 0.8, 16);
         particles.emit(bPos.x, bPos.y, 12, { color: vis?.color ?? '#ffffff', speed: 120, life: 0.3, size: 4 });
+        onSfx?.('bonus_pickup');
         world.destroy(e);
       }
     }
@@ -959,4 +992,178 @@ function applyDamage(
   if (hp.current <= 0 && world.has(entity, C.Enemy) && player) {
     player.kills++;
   }
+}
+
+// ─── WAVE SWARM EVENT SYSTEM ────────────────────────────────────────
+// Periodically spawns a line of fast enemies that fly in formation
+export function createWaveSwarmEventSystem(
+  gameState: { gameTime: number; ngPlusLevel: number },
+) {
+  let nextEventTime = 20 + Math.random() * 15; // first event at 20-35s
+
+  return (world: World, _dt: number) => {
+    const players = world.query(C.Player, C.Pos);
+    if (players.length === 0) return;
+    const pPos = world.get<Pos>(players[0], C.Pos);
+    const time = gameState.gameTime;
+    if (time < nextEventTime) return;
+
+    // Schedule next event (25-45s interval, shorter later in game)
+    const interval = Math.max(15, 35 - time / 40);
+    nextEventTime = time + interval + Math.random() * 10;
+
+    // Wave parameters scale with time
+    const t = time / GAME_DURATION;
+    const ng = gameState.ngPlusLevel;
+    const count = Math.min(20, 6 + Math.floor(t * 10));
+    const speed = 220 + t * 80 + ng * 20;
+
+    // Pick direction: random angle, wave flies through player position
+    const waveAngle = randomAngle();
+    const spawnDist = 700;
+    const originX = pPos.x + Math.cos(waveAngle) * spawnDist;
+    const originY = pPos.y + Math.sin(waveAngle) * spawnDist;
+
+    // Direction toward player
+    const dirX = -Math.cos(waveAngle);
+    const dirY = -Math.sin(waveAngle);
+
+    // Perpendicular for line spread
+    const perpX = -dirY;
+    const perpY = dirX;
+    const spacing = 28;
+
+    const def = ENEMIES['swarm'];
+    const hpMult = (1 + t * 1.2) * (1 + ng * NG_PLUS.hpMult);
+    const dmgMult = (1 + t * 1.0) * (1 + ng * NG_PLUS.damageMult);
+
+    for (let i = 0; i < count; i++) {
+      const offset = (i - (count - 1) / 2) * spacing;
+      const x = originX + perpX * offset;
+      const y = originY + perpY * offset;
+
+      const e = world.spawn();
+      world.add(e, C.Pos, { x, y } as Pos);
+      world.add(e, C.Vel, { x: dirX * speed, y: dirY * speed } as Vel);
+      world.add(e, C.Health, { current: def.hp * hpMult, max: def.hp * hpMult, invuln: 0 } as Health);
+      world.add(e, C.Collider, { radius: def.size } as Collider);
+      world.add(e, C.Enemy, {
+        type: 'swarm', speed: speed, damage: def.damage * dmgMult,
+        xpValue: def.xp, contactTimer: 0,
+      } as Enemy);
+      world.add(e, C.Visual, {
+        shape: def.shape, color: def.color, size: def.size,
+        glow: def.color, glowSize: 6, rotation: Math.atan2(dirY, dirX) + Math.PI / 2,
+      } as Visual);
+      world.add(e, C.WaveSwarm, {
+        dirX, dirY, speed, lifetime: 5,
+      } as WaveSwarmMember);
+    }
+  };
+}
+
+// Wave swarm movement — overrides normal AI, flies straight
+export function createWaveSwarmSystem() {
+  return (world: World, dt: number) => {
+    for (const e of world.query(C.WaveSwarm, C.Pos, C.Vel)) {
+      const swarm = world.get<WaveSwarmMember>(e, C.WaveSwarm);
+      const vel = world.get<Vel>(e, C.Vel);
+
+      // Keep velocity locked to swarm direction
+      vel.x = swarm.dirX * swarm.speed;
+      vel.y = swarm.dirY * swarm.speed;
+
+      swarm.lifetime -= dt;
+      if (swarm.lifetime <= 0) {
+        world.destroy(e);
+      }
+    }
+  };
+}
+
+// ─── CLOSING CIRCLE EVENT SYSTEM ────────────────────────────────────
+// Spawns enemies in a ring around the player that slowly closes
+export function createCircleEventSystem(
+  gameState: { gameTime: number; ngPlusLevel: number },
+) {
+  let nextEventTime = 40 + Math.random() * 20; // first at 40-60s
+
+  return (world: World, _dt: number) => {
+    const players = world.query(C.Player, C.Pos);
+    if (players.length === 0) return;
+    const pPos = world.get<Pos>(players[0], C.Pos);
+    const time = gameState.gameTime;
+    if (time < nextEventTime) return;
+
+    // Schedule next (40-60s interval)
+    const interval = Math.max(20, 50 - time / 30);
+    nextEventTime = time + interval + Math.random() * 15;
+
+    const t = time / GAME_DURATION;
+    const ng = gameState.ngPlusLevel;
+    const count = Math.min(24, 8 + Math.floor(t * 12));
+    const radius = 350 + Math.random() * 100;
+    const lifetime = 4 + Math.random() * 2; // vanish after 4-6s
+    const shrinkRate = (radius - 40) / (lifetime + 1); // won't fully close
+    const rotSpeed = 0.6 + t * 0.3;
+
+    const def = ENEMIES['ring'];
+    const hpMult = (1 + t * 1.2) * (1 + ng * NG_PLUS.hpMult);
+    const dmgMult = (1 + t * 1.0) * (1 + ng * NG_PLUS.damageMult);
+
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 / count) * i;
+      const x = pPos.x + Math.cos(angle) * radius;
+      const y = pPos.y + Math.sin(angle) * radius;
+
+      const e = world.spawn();
+      world.add(e, C.Pos, { x, y } as Pos);
+      world.add(e, C.Vel, { x: 0, y: 0 } as Vel);
+      world.add(e, C.Health, { current: def.hp * hpMult, max: def.hp * hpMult, invuln: 0 } as Health);
+      world.add(e, C.Collider, { radius: def.size } as Collider);
+      world.add(e, C.Enemy, {
+        type: 'ring', speed: 0, damage: def.damage * dmgMult,
+        xpValue: def.xp, contactTimer: 0,
+      } as Enemy);
+      world.add(e, C.Visual, {
+        shape: def.shape, color: def.color, size: def.size,
+        glow: '#2288ff', glowSize: 8, rotation: 0,
+      } as Visual);
+      world.add(e, C.CircleMember, {
+        centerX: pPos.x, centerY: pPos.y,
+        angle, radius, shrinkRate, rotSpeed,
+        lifetime,
+      } as CircleMember);
+    }
+  };
+}
+
+// Circle movement — orbits and closes in, despawns before fully closing
+export function createCircleSystem() {
+  return (world: World, dt: number) => {
+    for (const e of world.query(C.CircleMember, C.Pos)) {
+      const cm = world.get<CircleMember>(e, C.CircleMember);
+      const pos = world.get<Pos>(e, C.Pos);
+
+      cm.angle += cm.rotSpeed * dt;
+      cm.radius -= cm.shrinkRate * dt;
+      cm.lifetime -= dt;
+
+      // Update position on the shrinking circle
+      pos.x = cm.centerX + Math.cos(cm.angle) * cm.radius;
+      pos.y = cm.centerY + Math.sin(cm.angle) * cm.radius;
+
+      // Blink before despawning
+      if (cm.lifetime < 1) {
+        const vis = world.maybe<Visual>(e, C.Visual);
+        if (vis) {
+          vis.size = 9 * (0.5 + Math.sin(cm.lifetime * 12) * 0.5);
+        }
+      }
+
+      if (cm.lifetime <= 0) {
+        world.destroy(e);
+      }
+    }
+  };
 }

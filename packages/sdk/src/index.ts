@@ -5,7 +5,9 @@ import { CrazyGamesPlatform } from './crazygames';
 import { YandexPlatform } from './yandex';
 import { TelegramPlatform } from './telegram';
 
-export type { AdPlatform } from './ads';
+export type { AdPlatform, LeaderboardEntry } from './ads';
+export { CloudStorage, Leaderboards, detectLocale, createPlatformServices } from './services';
+export type { PlatformServices, LocaleMapping } from './services';
 
 let platform: AdPlatform = new NoopPlatform();
 

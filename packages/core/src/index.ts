@@ -14,6 +14,7 @@ export * from './scene';
 export * from './game-context';
 export * from './behavior-tree';
 export * from './audio';
+export * from './synth-audio';
 export * from './network';
 export * from './gravity';
 export * from './canvas-draw';

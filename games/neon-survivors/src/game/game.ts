@@ -1,11 +1,11 @@
 /** NeonSurvivorsScene — implements Scene, orchestrates all game systems */
 
-import { World, Camera2D, SpatialHash, ParticleSystem, FloatingTextManager, createDevCheatPanel, createPlayerCheatsSection, createWeaponCheatsSection, createGameSpeedSection, type CheatPanel, type Scene, type GameContext } from '@survivors/core';
+import { World, Camera2D, SpatialHash, ParticleSystem, FloatingTextManager, SynthAudio, createDevCheatPanel, createPlayerCheatsSection, createWeaponCheatsSection, createGameSpeedSection, type CheatPanel, type Scene, type GameContext } from '@survivors/core';
 import { C, Pos, Vel, Health, Collider, Player, Visual } from './components';
-import { GAME_DURATION, STAT_UPGRADES, WEAPONS, ENEMIES, xpForLevel } from './config';
+import { GAME_DURATION, STAT_UPGRADES, WEAPONS, ENEMIES, xpForLevel, type GameMode } from './config';
 import { GameRenderer } from './renderer';
 import { UIManager, GameScreen } from './ui';
-import type { AdPlatform } from '@survivors/sdk';
+import type { AdPlatform, PlatformServices } from '@survivors/sdk';
 import {
   createInputSystem,
   createMovementSystem,
@@ -21,9 +21,14 @@ import {
   createBonusPickupSystem,
   createEnemyProjectileSystem,
   createEnemySpinSystem,
+  createWaveSwarmEventSystem,
+  createWaveSwarmSystem,
+  createCircleEventSystem,
+  createCircleSystem,
   spawnEnemy,
 } from './systems';
 import { drawJoystick } from './canvas-helpers';
+import { SFX, AMBIENT } from './sounds';
 
 export class NeonSurvivorsScene implements Scene {
   readonly name = 'neon-survivors';
@@ -38,11 +43,15 @@ export class NeonSurvivorsScene implements Scene {
   private renderer!: GameRenderer;
   private ui: UIManager;
   private ads: AdPlatform;
+  private services: PlatformServices;
+  private audio: SynthAudio;
 
   private screen: GameScreen = 'menu';
   private gameTime = 0;
   private playerId = -1;
   private hasRevived = false;
+  private gameMode: GameMode = 'classic';
+  private ngPlusLevel = 0;
 
   private gameState = {
     damageMult: 0,
@@ -51,6 +60,9 @@ export class NeonSurvivorsScene implements Scene {
     bossSpawned: new Set<number>(),
     minibossSpawned: new Set<number>(),
     enemySpinEnabled: true,
+    ngPlusLevel: 0,
+    gameMode: 'classic' as GameMode,
+    onSfx: undefined as ((id: string) => void) | undefined,
   };
 
   private gameCtx: GameContext | null = null;
@@ -68,11 +80,18 @@ export class NeonSurvivorsScene implements Scene {
     }
   };
 
-  constructor(canvas: HTMLCanvasElement, ads: AdPlatform) {
+  constructor(canvas: HTMLCanvasElement, ads: AdPlatform, services: PlatformServices) {
     this.canvas = canvas;
     this.ctx2d = canvas.getContext('2d')!;
     this.ads = ads;
+    this.services = services;
     this.spatialHash = new SpatialHash(64);
+
+    // Procedural audio
+    this.audio = new SynthAudio();
+    this.audio.register(SFX);
+    this.audio.registerAmbient(AMBIENT);
+    this.gameState.onSfx = (id) => this.audio.play(id, 0.03);
 
     this.ui = new UIManager(
       this.ctx2d,
@@ -83,7 +102,16 @@ export class NeonSurvivorsScene implements Scene {
     this.ui.setShareHandler((text) => this.shareScore(text));
     this.ui.setResumeHandler(() => this.resumeGame());
     this.ui.setMainMenuHandler(() => this.goToMenu());
+    this.ui.setPlayHandler(() => this.startGame());
+    this.ui.setToggleSoundHandler(() => this.toggleSound());
     this.ui.enableTracking();
+
+    // Restore mute state
+    try {
+      const muted = localStorage.getItem('ns_muted') === '1';
+      this.audio.muted = muted;
+      this.ui.soundMuted = muted;
+    } catch { /* ignore */ }
   }
 
   enter(ctx: GameContext): void {
@@ -91,28 +119,64 @@ export class NeonSurvivorsScene implements Scene {
     this.camera = new Camera2D(window.innerWidth, window.innerHeight);
     this.resize();
 
+    this.loadProgress();
+
     ctx.events.on('resize', () => this.resize());
     window.addEventListener('keydown', this.onKeyDown);
 
     this.initGame(ctx);
   }
 
+  private loadProgress(): void {
+    // Load from localStorage (sync), then cloud overwrites if newer
+    const local = this.services.storage.load((cloud) => {
+      if (typeof cloud.ngPlusLevel === 'number' && cloud.ngPlusLevel > this.ngPlusLevel) {
+        this.ngPlusLevel = cloud.ngPlusLevel;
+        this.ui.ngPlusLevel = this.ngPlusLevel;
+      }
+    });
+
+    this.ngPlusLevel = typeof local?.ngPlusLevel === 'number' ? Math.max(0, local.ngPlusLevel) : 0;
+    this.ui.ngPlusLevel = this.ngPlusLevel;
+  }
+
+  private saveProgress(): void {
+    this.services.storage.save({ ngPlusLevel: this.ngPlusLevel }).catch(() => {});
+  }
+
+  private submitScores(player: Player): void {
+    this.services.leaderboards.submitAll({
+      kills: player.kills,
+      survival_time: Math.floor(this.gameTime),
+      damage: Math.floor(player.damageDealt),
+    });
+  }
+
   exit(_ctx: GameContext): void {
     window.removeEventListener('keydown', this.onKeyDown);
     this.ui.destroy();
+    this.audio.dispose();
     this.cheats?.destroy();
     this.cheats = null;
     this.gameCtx = null;
   }
 
+  private startGame(): void {
+    if (this.screen !== 'menu' || !this.gameCtx) return;
+    this.audio.unlock();
+    this.gameMode = this.ui.selectedMode;
+    this.gameState.gameMode = this.gameMode;
+    this.gameState.ngPlusLevel = this.gameMode === 'classic' ? this.ngPlusLevel : 0;
+    this.renderer.gameMode = this.gameMode;
+    this.initGame(this.gameCtx);
+    this.screen = 'playing';
+    this.ads.gameplayStart();
+    this.audio.startAmbient('space_drone');
+    this.audio.startAmbient('neon_shimmer');
+  }
+
   update(ctx: GameContext, dt: number): void {
-    if (this.screen === 'menu') {
-      if (ctx.input.anyKey) {
-        this.screen = 'playing';
-        this.ads.gameplayStart();
-      }
-      return;
-    }
+    if (this.screen === 'menu') return;
 
     // Mobile pause button
     if (ctx.input.pauseTap) {
@@ -272,18 +336,23 @@ export class NeonSurvivorsScene implements Scene {
     this.world.addSystem(createProjectileSystem());
     this.world.addSystem(createEnemyProjectileSystem());
     this.world.addSystem(createEnemySpinSystem());
-    this.world.addSystem(createCollisionSystem(this.spatialHash, this.particles, this.floatingText));
-    this.world.addSystem(createPickupSystem(this.particles, this.floatingText));
-    this.world.addSystem(createDeathSystem(this.particles));
+    const onSfx = this.gameState.onSfx;
+    this.world.addSystem(createCollisionSystem(this.spatialHash, this.particles, this.floatingText, onSfx));
+    this.world.addSystem(createPickupSystem(this.particles, this.floatingText, onSfx));
+    this.world.addSystem(createDeathSystem(this.particles, onSfx));
     this.world.addSystem(createWaveSystem(this.gameState));
+    this.world.addSystem(createWaveSwarmEventSystem(this.gameState));
+    this.world.addSystem(createWaveSwarmSystem());
+    this.world.addSystem(createCircleEventSystem(this.gameState));
+    this.world.addSystem(createCircleSystem());
     this.world.addSystem(createLightningSystem());
     this.world.addSystem(createBonusSpawnSystem());
-    this.world.addSystem(createBonusPickupSystem(this.particles, this.floatingText, this.spatialHash));
+    this.world.addSystem(createBonusPickupSystem(this.particles, this.floatingText, this.spatialHash, onSfx));
 
     this.camera.pos.set(0, 0);
 
-    // Dev cheats
-    if (!this.cheats) {
+    // Dev cheats — only in development mode, stripped from production build
+    if (import.meta.env.DEV && !this.cheats) {
       this.cheats = createDevCheatPanel({
         onPause: () => {
           if (this.screen === 'playing') {
@@ -318,10 +387,18 @@ export class NeonSurvivorsScene implements Scene {
     }
   }
 
+  private toggleSound(): void {
+    this.audio.muted = !this.audio.muted;
+    this.ui.soundMuted = this.audio.muted;
+    try { localStorage.setItem('ns_muted', this.audio.muted ? '1' : '0'); } catch { /* ignore */ }
+  }
+
   private goToMenu(): void {
     this.ads.gameplayStop();
+    this.audio.stopAllAmbient(1);
     this.screen = 'menu';
     this.ui.screen = 'menu';
+    this.ui.clickConsumed = true;
   }
 
   private revive(): void {
@@ -415,6 +492,7 @@ export class NeonSurvivorsScene implements Scene {
 
       this.ui.generateUpgrades(player);
       this.screen = 'levelup';
+      this.audio.play('level_up');
       this.particles.emit(
         this.world.get<Pos>(this.playerId, C.Pos).x,
         this.world.get<Pos>(this.playerId, C.Pos).y,
@@ -608,17 +686,28 @@ export class NeonSurvivorsScene implements Scene {
 
   private checkGameEnd(): void {
     const hp = this.world.get<Health>(this.playerId, C.Health);
+    const player = this.world.get<Player>(this.playerId, C.Player);
     if (hp.current <= 0) {
       this.screen = 'gameover';
       this.ui.canRevive = this.ads.hasAds && !this.hasRevived;
       this.camera.shake(8, 0.5);
       this.ads.gameplayStop();
+      this.audio.stopAllAmbient(2);
+      this.audio.play('game_over');
+      this.submitScores(player);
+      this.saveProgress();
       return;
     }
-    if (this.gameTime >= GAME_DURATION) {
+    if (this.gameMode === 'classic' && this.gameTime >= GAME_DURATION) {
+      this.ngPlusLevel++;
+      this.ui.ngPlusLevel = this.ngPlusLevel;
       this.screen = 'victory';
       this.ads.gameplayStop();
       this.ads.happytime();
+      this.audio.stopAllAmbient(2);
+      this.audio.play('victory');
+      this.submitScores(player);
+      this.saveProgress();
     }
   }
 }
