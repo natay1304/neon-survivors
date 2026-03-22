@@ -14,18 +14,21 @@
     "dev:fall-vector": "npm run dev --workspace=games/fall-vector",
     "dev:gravity-swoop": "npm run dev --workspace=games/gravity-swoop",
     "dev:neon-dash": "npm run dev --workspace=games/neon-dash",
+    "dev:neon-path": "npm run dev --workspace=games/neon-path",
     "build": "npm run build:all",
     "build:neon": "npm run build --workspace=games/neon-survivors",
     "build:neon-strike": "npm run build --workspace=games/neon-strike",
     "build:fall-vector": "npm run build --workspace=games/fall-vector",
     "build:gravity-swoop": "npm run build --workspace=games/gravity-swoop",
     "build:neon-dash": "npm run build --workspace=games/neon-dash",
-    "build:all": "npm run build:neon && npm run build:neon-strike && npm run build:fall-vector && npm run build:gravity-swoop && npm run build:neon-dash",
+    "build:neon-path": "npm run build --workspace=games/neon-path",
+    "build:all": "npm run build:neon && npm run build:neon-strike && npm run build:fall-vector && npm run build:gravity-swoop && npm run build:neon-dash && npm run build:neon-path",
     "preview": "npm run preview --workspace=games/neon-survivors",
     "preview:neon": "npm run preview --workspace=games/neon-survivors",
     "preview:neon-strike": "npm run preview --workspace=games/neon-strike",
     "preview:fall-vector": "npm run preview --workspace=games/fall-vector",
     "preview:gravity-swoop": "npm run preview --workspace=games/gravity-swoop",
-    "preview:neon-dash": "npm run preview --workspace=games/neon-dash"
+    "preview:neon-dash": "npm run preview --workspace=games/neon-dash",
+    "preview:neon-path": "npm run preview --workspace=games/neon-path"
   }
 }
