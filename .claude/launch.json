@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace=games/neon-strike"],
       "port": 5174
+    },
+    {
+      "name": "neon-path",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=games/neon-path"],
+      "port": 5178
     }
   ]
 }
