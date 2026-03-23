@@ -49,7 +49,9 @@ export class NeonSurvivorsScene implements Scene {
   private screen: GameScreen = 'menu';
   private gameTime = 0;
   private playerId = -1;
-  private hasRevived = false;
+  private reviveCount = 0;
+  private readonly maxRevives = 3;
+  private gamesPlayed = 0;
   private gameMode: GameMode = 'classic';
   private ngPlusLevel = 0;
 
@@ -77,6 +79,13 @@ export class NeonSurvivorsScene implements Scene {
         this.screen = 'playing';
         this.ads.gameplayStart();
       }
+    }
+  };
+
+  private onVisibilityChange = () => {
+    if (document.hidden && this.screen === 'playing') {
+      this.screen = 'paused';
+      this.ads.gameplayStop();
     }
   };
 
@@ -123,6 +132,7 @@ export class NeonSurvivorsScene implements Scene {
 
     ctx.events.on('resize', () => this.resize());
     window.addEventListener('keydown', this.onKeyDown);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
 
     this.initGame(ctx);
   }
@@ -154,6 +164,7 @@ export class NeonSurvivorsScene implements Scene {
 
   exit(_ctx: GameContext): void {
     window.removeEventListener('keydown', this.onKeyDown);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.ui.destroy();
     this.audio.dispose();
     this.cheats?.destroy();
@@ -292,10 +303,11 @@ export class NeonSurvivorsScene implements Scene {
     this.gameState.gameTime = 0;
     this.gameState.bossSpawned.clear();
     this.gameState.minibossSpawned.clear();
-    this.hasRevived = false;
+    this.reviveCount = 0;
     this.ui.canRevive = this.ads.hasAds;
 
     this.renderer = new GameRenderer(this.ctx2d, this.camera, this.particles, this.floatingText);
+    this.renderer.gameMode = this.gameMode;
 
     // Spawn player
     this.playerId = this.world.spawn();
@@ -371,13 +383,28 @@ export class NeonSurvivorsScene implements Scene {
   }
 
   private restart(): void {
-    this.ads.showInterstitial().catch(() => {}).finally(() => {
+    this.gamesPlayed++;
+    const showAd = this.gamesPlayed % 3 === 0;
+
+    if (showAd) {
+      // Pause everything before showing ad
+      this.screen = 'loading';
+      this.ads.gameplayStop();
+
+      this.ads.showInterstitial().catch(() => {}).finally(() => {
+        if (this.gameCtx) {
+          this.initGame(this.gameCtx);
+          this.screen = 'playing';
+          this.ads.gameplayStart();
+        }
+      });
+    } else {
       if (this.gameCtx) {
         this.initGame(this.gameCtx);
         this.screen = 'playing';
         this.ads.gameplayStart();
       }
-    });
+    }
   }
 
   private resumeGame(): void {
@@ -402,13 +429,13 @@ export class NeonSurvivorsScene implements Scene {
   }
 
   private revive(): void {
-    if (this.hasRevived) return;
+    if (this.reviveCount >= this.maxRevives) return;
     this.ads.showRewarded().then((watched) => {
       if (watched) {
-        this.hasRevived = true;
-        this.ui.canRevive = false;
+        this.reviveCount++;
+        this.ui.canRevive = this.reviveCount < this.maxRevives;
         const hp = this.world.get<Health>(this.playerId, C.Health);
-        hp.current = Math.ceil(hp.max * 0.5);
+        hp.current = Math.ceil(hp.max * 0.3);
         hp.invuln = 2;
         this.screen = 'playing';
         this.ads.gameplayStart();
@@ -423,31 +450,39 @@ export class NeonSurvivorsScene implements Scene {
   }
 
   private shareScore(text: string): void {
-    const url = 'https://t.me/neon_survivors_bot/game';
-    const fullText = `${text}\n${url}`;
+    const isYandex = this.ads.name === 'yandex';
+    const isTelegram = this.ads.name === 'telegram';
+    const gameUrl = isTelegram
+      ? 'https://t.me/neon_survivors_bot/game'
+      : isYandex
+        ? 'https://yandex.ru/games/app/TODO' // Yandex game page URL
+        : window.location.href;
+    const fullText = `${text}\n${gameUrl}`;
 
-    // Telegram Mini App: use native share
-    if (window.Telegram?.WebApp) {
+    // Telegram Mini App: use share link via openTelegramLink
+    if (isTelegram && window.Telegram?.WebApp) {
       try {
-        // switchInlineQuery shares text to a chat
-        (window.Telegram.WebApp as any).switchInlineQuery?.(text, ['users', 'groups', 'channels']);
+        const tg = window.Telegram.WebApp as any;
+        const encoded = encodeURIComponent(fullText);
+        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(gameUrl)}&text=${encoded}`;
+        if (tg.openTelegramLink) {
+          tg.openTelegramLink(shareUrl);
+          return;
+        }
+        window.open(shareUrl, '_blank');
         return;
       } catch { /* fallback below */ }
     }
 
-    // Web Share API
+    // Web Share API (works on mobile browsers, some desktops)
     if (navigator.share) {
-      navigator.share({ text: fullText }).catch(() => {});
+      navigator.share({ title: 'Neon Survivors', text: fullText }).catch(() => {});
       return;
     }
 
     // Fallback: copy to clipboard
     navigator.clipboard?.writeText(fullText).then(() => {
-      this.floatingText.add(
-        this.world.get<Pos>(this.playerId, C.Pos).x,
-        this.world.get<Pos>(this.playerId, C.Pos).y,
-        'Copied!', '#44ff44',
-      );
+      this.ui.showCopiedFeedback();
     }).catch(() => {});
   }
 
@@ -689,7 +724,7 @@ export class NeonSurvivorsScene implements Scene {
     const player = this.world.get<Player>(this.playerId, C.Player);
     if (hp.current <= 0) {
       this.screen = 'gameover';
-      this.ui.canRevive = this.ads.hasAds && !this.hasRevived;
+      this.ui.canRevive = this.ads.hasAds && this.reviveCount < this.maxRevives;
       this.camera.shake(8, 0.5);
       this.ads.gameplayStop();
       this.audio.stopAllAmbient(2);

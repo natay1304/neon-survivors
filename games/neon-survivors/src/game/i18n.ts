@@ -38,6 +38,7 @@ const STRINGS = {
     watchAdRevive:     '\u25b6 WATCH AD \u2014 REVIVE',
     playAgain:         'PLAY AGAIN',
     shareScore:        '\ud83d\udce4 SHARE SCORE',
+    copied:            '\u2705 COPIED!',
     // Pause
     paused:            'PAUSED',
     tapResume:         'Tap \u23f8 to resume',
@@ -108,6 +109,7 @@ const STRINGS = {
     watchAdRevive:     '\u25b6 РЕКЛАМА \u2014 ВОСКРЕСНУТЬ',
     playAgain:         'ИГРАТЬ СНОВА',
     shareScore:        '\ud83d\udce4 ПОДЕЛИТЬСЯ',
+    copied:            '\u2705 СКОПИРОВАНО!',
     paused:            'ПАУЗА',
     tapResume:         'Нажмите \u23f8 чтобы продолжить',
     escResume:         'ESC или \u23f8 чтобы продолжить',

@@ -5,7 +5,7 @@ import { WEAPONS, STAT_UPGRADES, type GameMode } from './config';
 import { shuffle } from '@survivors/core';
 import { t, getLocale, setLocale } from './i18n';
 
-export type GameScreen = 'menu' | 'playing' | 'levelup' | 'gameover' | 'victory' | 'paused';
+export type GameScreen = 'menu' | 'playing' | 'levelup' | 'gameover' | 'victory' | 'paused' | 'loading';
 
 export interface UpgradeOption {
   id: string;
@@ -33,6 +33,7 @@ export class UIManager {
   ngPlusLevel = 0;
   soundMuted = false;
   private shareData: { kills: number; time: string; level: number; victory: boolean } | null = null;
+  private copiedTimer = 0;
 
   constructor(
     private ctx: CanvasRenderingContext2D,
@@ -172,8 +173,8 @@ export class UIManager {
 
   private drawSoundButton(w: number, s: number): void {
     const ctx = this.ctx;
-    const lBtnW = Math.max(32, Math.round(38 * s));
-    const lBtnH = Math.max(20, Math.round(24 * s));
+    const lBtnW = Math.max(38, Math.round(46 * s));
+    const lBtnH = Math.max(26, Math.round(30 * s));
     const lGap = 4;
     const lTotalW = lBtnW * 2 + lGap;
     const btnW = lBtnH; // square, same height as lang buttons
@@ -189,41 +190,41 @@ export class UIManager {
     ctx.lineWidth = 1;
     ctx.strokeRect(bx, by, btnW, btnH);
 
-    // Draw speaker icon with canvas primitives
-    const cx = bx + btnW / 2;
+    // Draw speaker icon centered in button
+    const cx = bx + btnW / 2 - 1; // shift left slightly to visually center with waves
     const cy = by + btnH / 2;
-    const sz = Math.min(btnW, btnH) * 0.3;
+    const sz = Math.min(btnW, btnH) * 0.32;
 
     ctx.fillStyle = muted ? '#ff4444' : '#888899';
     ctx.strokeStyle = muted ? '#ff4444' : '#888899';
     ctx.lineWidth = 1.5;
 
-    // Speaker body
+    // Speaker body (centered around cx)
     ctx.beginPath();
-    ctx.moveTo(cx - sz * 0.6, cy - sz * 0.3);
-    ctx.lineTo(cx - sz * 0.2, cy - sz * 0.3);
-    ctx.lineTo(cx + sz * 0.3, cy - sz * 0.7);
-    ctx.lineTo(cx + sz * 0.3, cy + sz * 0.7);
-    ctx.lineTo(cx - sz * 0.2, cy + sz * 0.3);
-    ctx.lineTo(cx - sz * 0.6, cy + sz * 0.3);
+    ctx.moveTo(cx - sz * 0.5, cy - sz * 0.3);
+    ctx.lineTo(cx - sz * 0.1, cy - sz * 0.3);
+    ctx.lineTo(cx + sz * 0.4, cy - sz * 0.7);
+    ctx.lineTo(cx + sz * 0.4, cy + sz * 0.7);
+    ctx.lineTo(cx - sz * 0.1, cy + sz * 0.3);
+    ctx.lineTo(cx - sz * 0.5, cy + sz * 0.3);
     ctx.closePath();
     ctx.fill();
 
     if (muted) {
       // X mark
       ctx.beginPath();
-      ctx.moveTo(cx + sz * 0.5, cy - sz * 0.4);
-      ctx.lineTo(cx + sz * 1.0, cy + sz * 0.4);
-      ctx.moveTo(cx + sz * 1.0, cy - sz * 0.4);
-      ctx.lineTo(cx + sz * 0.5, cy + sz * 0.4);
+      ctx.moveTo(cx + sz * 0.6, cy - sz * 0.4);
+      ctx.lineTo(cx + sz * 1.1, cy + sz * 0.4);
+      ctx.moveTo(cx + sz * 1.1, cy - sz * 0.4);
+      ctx.lineTo(cx + sz * 0.6, cy + sz * 0.4);
       ctx.stroke();
     } else {
       // Sound waves
       ctx.beginPath();
-      ctx.arc(cx + sz * 0.4, cy, sz * 0.45, -Math.PI * 0.35, Math.PI * 0.35);
+      ctx.arc(cx + sz * 0.5, cy, sz * 0.5, -Math.PI * 0.35, Math.PI * 0.35);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(cx + sz * 0.4, cy, sz * 0.8, -Math.PI * 0.35, Math.PI * 0.35);
+      ctx.arc(cx + sz * 0.5, cy, sz * 0.85, -Math.PI * 0.35, Math.PI * 0.35);
       ctx.stroke();
     }
   }
@@ -231,8 +232,8 @@ export class UIManager {
   private drawLangSwitcher(w: number, s: number): void {
     const ctx = this.ctx;
     const locale = getLocale();
-    const btnW = Math.max(32, Math.round(38 * s));
-    const btnH = Math.max(20, Math.round(24 * s));
+    const btnW = Math.max(38, Math.round(46 * s));
+    const btnH = Math.max(26, Math.round(30 * s));
     const gap = 4;
     const totalW = btnW * 2 + gap;
     const rx = w - totalW - 12;
@@ -336,6 +337,10 @@ export class UIManager {
 
   setReviveHandler(handler: () => void): void { this.onRevive = handler; }
   setShareHandler(handler: (text: string) => void): void { this.onShare = handler; }
+
+  showCopiedFeedback(): void {
+    this.copiedTimer = 2.0; // show "Copied!" for 2 seconds
+  }
   setResumeHandler(handler: () => void): void { this.onResume = handler; }
   setMainMenuHandler(handler: () => void): void { this.onMainMenu = handler; }
   setPlayHandler(handler: () => void): void { this.onPlay = handler; }
@@ -422,7 +427,25 @@ export class UIManager {
     ctx.strokeRect(shareX, shareY, shareW, shareH);
     ctx.fillStyle = '#44ff44';
     ctx.font = 'bold 15px monospace';
-    ctx.fillText(strings.shareScore, w / 2, shareY + 24);
+    const shareLabel = this.copiedTimer > 0 ? (strings.copied ?? 'Copied!') : strings.shareScore;
+    ctx.fillText(shareLabel, w / 2, shareY + 24);
+
+    if (this.copiedTimer > 0) this.copiedTimer -= 0.016;
+
+    // Main menu button
+    const menuW = 200, menuH = 38;
+    const menuX = w / 2 - menuW / 2;
+    const menuY = shareY + shareH + 10;
+    const menuHover = this.isHovering(menuX, menuY, menuW, menuH);
+
+    ctx.fillStyle = menuHover ? '#2a1a1a' : '#1a0a0a';
+    ctx.fillRect(menuX, menuY, menuW, menuH);
+    ctx.strokeStyle = '#777799';
+    ctx.lineWidth = menuHover ? 2 : 1;
+    ctx.strokeRect(menuX, menuY, menuW, menuH);
+    ctx.fillStyle = '#777799';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText(strings.mainMenu, w / 2, menuY + 24);
 
     this.shareData = { kills: player.kills, time: timeStr, level: player.level, victory };
   }
@@ -602,8 +625,8 @@ export class UIManager {
 
   private checkSoundButtonClick(x: number, y: number, w: number): boolean {
     const s = Math.min(1, w / 700);
-    const lBtnW = Math.max(32, Math.round(38 * s));
-    const lBtnH = Math.max(20, Math.round(24 * s));
+    const lBtnW = Math.max(38, Math.round(46 * s));
+    const lBtnH = Math.max(26, Math.round(30 * s));
     const lGap = 4;
     const lTotalW = lBtnW * 2 + lGap;
     const btnW = lBtnH;
@@ -632,8 +655,8 @@ export class UIManager {
       }
 
       // Language buttons
-      const lBtnW = Math.max(32, Math.round(38 * s));
-      const lBtnH = Math.max(20, Math.round(24 * s));
+      const lBtnW = Math.max(38, Math.round(46 * s));
+      const lBtnH = Math.max(26, Math.round(30 * s));
       const lGap = 4;
       const lTotalW = lBtnW * 2 + lGap;
       const lRx = w - lTotalW - 12;
@@ -755,6 +778,18 @@ export class UIManager {
           ? strings.shareVictory(d.level, d.kills, d.time)
           : strings.shareDeath(d.level, d.kills, d.time);
         this.onShare(text);
+        return;
+      }
+    }
+
+    // Main menu button (below share)
+    if (this.onMainMenu) {
+      const shareY = btnY + btnH + 14;
+      const menuW = 200, menuH = 38;
+      const menuX = w / 2 - menuW / 2;
+      const menuY = shareY + 38 + 10;
+      if (x >= menuX && x <= menuX + menuW && y >= menuY && y <= menuY + menuH) {
+        this.onMainMenu();
         return;
       }
     }

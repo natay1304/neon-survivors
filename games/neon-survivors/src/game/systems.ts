@@ -113,7 +113,7 @@ export function createBTEnemySystem(spatialHash: SpatialHash<Entity>) {
         const sdy = bb.get<number>('__shootDirY', 0);
         if (sdx !== 0 || sdy !== 0) {
           const projSpeed = 180 + aggression * 20;
-          const projDmg = enemy.damage * 0.7;
+          const projDmg = enemy.damage * 0.35;
           const ep = world.spawn();
           world.add(ep, C.Pos, { x: pos.x + sdx * 18, y: pos.y + sdy * 18 });
           world.add(ep, C.Vel, { x: sdx * projSpeed, y: sdy * projSpeed });
