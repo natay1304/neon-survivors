@@ -1,7 +1,7 @@
 /** Neon Survivors — procedural sound definitions.
  *  All sounds synthesized via Web Audio API, zero audio files. */
 
-import type { SynthSoundDef, AmbientLayerDef } from '@survivors/core';
+import type { SynthSoundDef, AmbientLayerDef, MusicTrackDef } from '@survivors/core';
 
 // ── SFX ─────────────────────────────────────────────────────────────
 
@@ -159,28 +159,115 @@ export const SFX: SynthSoundDef[] = [
 
 // ── Ambient ─────────────────────────────────────────────────────────
 
-export const AMBIENT: AmbientLayerDef[] = [
-  // Deep space pad — warm low-mid drone with slow breathing
+export const AMBIENT: AmbientLayerDef[] = [];
+
+// ── Music ───────────────────────────────────────────────────────────
+
+/** MIDI note → Hz */
+const m = (note: number) => 440 * Math.pow(2, (note - 69) / 12);
+
+// Note shorthand: freq, duration in steps, optional velocity
+const nt = (midi: number, dur: number, vel = 1): { freq: number; dur: number; vel: number } =>
+  ({ freq: m(midi), dur, vel });
+const rest = (dur: number): { freq: number; dur: number; vel: number } =>
+  ({ freq: 0, dur, vel: 0 });
+
+export const MUSIC: MusicTrackDef[] = [
   {
-    id: 'space_drone',
-    voices: [
-      { wave: 'sine', frequency: 65, gain: 0.35 },       // low C
-      { wave: 'sine', frequency: 98, gain: 0.2, detune: 3 },  // G below middle
-      { wave: 'triangle', frequency: 130, gain: 0.1 },    // octave C
-    ],
-    filter: { type: 'lowpass', frequency: 180, sweepTo: 300, Q: 0.8 },
-    volume: 0.08,
+    id: 'cosmic_drift',
+    bpm: 72,
+    subdivision: 4,
+    volume: 0.18,
     fadeIn: 4,
-  },
-  // Ethereal shimmer — soft high-register sparkle
-  {
-    id: 'neon_shimmer',
     voices: [
-      { wave: 'sine', frequency: 3200, gain: 0.04, detune: 8 },
-      { wave: 'sine', frequency: 4800, gain: 0.02, detune: -5 },
+      // 0 — Sub bass (deep sine)
+      {
+        wave: 'sine',
+        envelope: { attack: 0.4, decay: 0.3, sustain: 0.7, release: 0.8 },
+        filter: { type: 'lowpass', frequency: 200 },
+        gain: 0.6,
+      },
+      // 1 — Pad (warm triangle, slow swell)
+      {
+        wave: 'triangle',
+        envelope: { attack: 0.6, decay: 0.4, sustain: 0.5, release: 1.0 },
+        filter: { type: 'lowpass', frequency: 800, Q: 0.5 },
+        gain: 0.3,
+        detune: 5,
+      },
+      // 2 — Arp (clean sine, plucky)
+      {
+        wave: 'sine',
+        envelope: { attack: 0.01, decay: 0.15, sustain: 0.2, release: 0.3 },
+        gain: 0.35,
+      },
+      // 3 — Rhythmic pulse (filtered square, subtle)
+      {
+        wave: 'square',
+        envelope: { attack: 0.005, decay: 0.06, sustain: 0.0, release: 0.05 },
+        filter: { type: 'lowpass', frequency: 300 },
+        gain: 0.2,
+      },
     ],
-    filter: { type: 'bandpass', frequency: 4000, sweepTo: 6000, Q: 0.4 },
-    volume: 0.025,
-    fadeIn: 6,
+    patterns: [
+      // ── Bass (voice 0): whole notes, 16 steps each — Am Em F Dm ──
+      {
+        voice: 0,
+        notes: [
+          nt(33, 16),  // A1
+          nt(40, 16),  // E2
+          nt(41, 16),  // F2
+          nt(38, 16),  // D2
+        ],
+      },
+      // ── Pad root (voice 1): half notes, 8 steps ──
+      {
+        voice: 1,
+        notes: [
+          nt(57, 8), nt(57, 8),   // A3, A3  (Am)
+          nt(52, 8), nt(52, 8),   // E3, E3  (Em)
+          nt(53, 8), nt(53, 8),   // F3, F3  (F)
+          nt(50, 8), nt(50, 8),   // D3, D3  (Dm)
+        ],
+      },
+      // ── Pad fifth (voice 1): half notes, harmony ──
+      {
+        voice: 1,
+        notes: [
+          nt(64, 8), nt(64, 8),   // E4, E4  (Am)
+          nt(59, 8), nt(59, 8),   // B3, B3  (Em)
+          nt(60, 8), nt(60, 8),   // C4, C4  (F)
+          nt(57, 8), nt(57, 8),   // A3, A3  (Dm)
+        ],
+      },
+      // ── Arp (voice 2): eighth notes, ascending/descending arpeggios ──
+      {
+        voice: 2,
+        notes: [
+          // Am: A3-C4-E4-A4-E4-C4-A3-rest
+          nt(57, 2, 0.8), nt(60, 2, 0.6), nt(64, 2, 0.9), nt(69, 2, 0.7),
+          nt(64, 2, 0.6), nt(60, 2, 0.5), nt(57, 2, 0.7), rest(2),
+          // Em: E3-G3-B3-E4-B3-G3-E3-rest
+          nt(52, 2, 0.8), nt(55, 2, 0.6), nt(59, 2, 0.9), nt(64, 2, 0.7),
+          nt(59, 2, 0.6), nt(55, 2, 0.5), nt(52, 2, 0.7), rest(2),
+          // F: F3-A3-C4-F4-C4-A3-F3-rest
+          nt(53, 2, 0.8), nt(57, 2, 0.6), nt(60, 2, 0.9), nt(65, 2, 0.7),
+          nt(60, 2, 0.6), nt(57, 2, 0.5), nt(53, 2, 0.7), rest(2),
+          // Dm: D3-F3-A3-D4-A3-F3-D3-rest
+          nt(50, 2, 0.8), nt(53, 2, 0.6), nt(57, 2, 0.9), nt(62, 2, 0.7),
+          nt(57, 2, 0.6), nt(53, 2, 0.5), nt(50, 2, 0.7), rest(2),
+        ],
+      },
+      // ── Rhythmic pulse (voice 3): quarter-note kick on beats ──
+      {
+        voice: 3,
+        notes: [
+          nt(45, 1, 0.7), rest(3),  // beat 1
+          rest(4),                    // beat 2 (rest)
+          nt(45, 1, 0.5), rest(3),  // beat 3
+          rest(4),                    // beat 4 (rest)
+        ],
+      },
+    ],
   },
 ];

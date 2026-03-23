@@ -51,6 +51,50 @@ export interface SynthSoundDef {
   volumeVariation?: number;
 }
 
+// ── Music Sequencer Types ──────────────────────────────────────────
+
+export interface MusicVoiceDef {
+  wave: WaveType;
+  envelope: Envelope;
+  filter?: FilterDef;
+  /** Base gain for this voice. Default 1 */
+  gain?: number;
+  /** Detune in cents */
+  detune?: number;
+}
+
+export interface MusicNote {
+  /** Frequency in Hz. 0 = rest */
+  freq: number;
+  /** Duration in steps (1 step = one subdivision). */
+  dur: number;
+  /** Velocity 0..1. Default 1 */
+  vel?: number;
+}
+
+export interface MusicPatternDef {
+  /** Index into the track's voices array */
+  voice: number;
+  /** Note sequence. Loops automatically. */
+  notes: MusicNote[];
+}
+
+export interface MusicTrackDef {
+  id: string;
+  /** Tempo in BPM */
+  bpm: number;
+  /** Subdivisions per beat (4 = sixteenth notes). Default 4 */
+  subdivision?: number;
+  /** Voice definitions */
+  voices: MusicVoiceDef[];
+  /** Parallel patterns (can reference the same voice) */
+  patterns: MusicPatternDef[];
+  /** Master volume 0..1. Default 0.15 */
+  volume?: number;
+  /** Fade-in seconds. Default 3 */
+  fadeIn?: number;
+}
+
 export interface AmbientLayerDef {
   /** Unique name */
   id: string;
@@ -62,6 +106,18 @@ export interface AmbientLayerDef {
   volume?: number;
   /** Fade-in time in seconds. Default 2. */
   fadeIn?: number;
+  /**
+   * Amplitude tremolo — modulates volume at a musical rate to create
+   * rhythmic pulsing (e.g. rate 1.4 = 84 BPM quarter notes).
+   */
+  tremolo?: {
+    /** LFO rate in Hz. 1.4 = 84 BPM ♩, 2.8 = 84 BPM ♪ */
+    rate: number;
+    /** Depth 0..1. 1 = fully silent at trough, 0 = no effect */
+    depth: number;
+    /** LFO waveform. Default 'sine' */
+    wave?: OscillatorType;
+  };
 }
 
 // ── Noise buffer (shared) ───────────────────────────────────────────
@@ -80,6 +136,17 @@ function getNoiseBuffer(ctx: AudioContext): AudioBuffer {
   return buffer;
 }
 
+// ── Music sequencer state (internal) ──────────────────────────────
+
+interface MusicTrackState {
+  gain: GainNode;
+  schedulerId: number;
+  patternSteps: number[];
+  patternTimes: number[];
+  stepDuration: number;
+  def: MusicTrackDef;
+}
+
 // ── SynthAudio ──────────────────────────────────────────────────────
 
 export class SynthAudio {
@@ -90,6 +157,8 @@ export class SynthAudio {
   private defs = new Map<string, SynthSoundDef>();
   private ambientLayers = new Map<string, AmbientLayerDef>();
   private activeAmbient = new Map<string, { nodes: AudioNode[]; gain: GainNode }>();
+  private musicTracks = new Map<string, MusicTrackDef>();
+  private activeTracks = new Map<string, MusicTrackState>();
   private _muted = false;
   private _masterVolume = 1.0;
   private _sfxVolume = 1.0;
@@ -130,6 +199,12 @@ export class SynthAudio {
   registerAmbient(defs: AmbientLayerDef | AmbientLayerDef[]): void {
     const arr = Array.isArray(defs) ? defs : [defs];
     for (const def of arr) this.ambientLayers.set(def.id, def);
+  }
+
+  /** Register music track definitions. */
+  registerMusic(defs: MusicTrackDef | MusicTrackDef[]): void {
+    const arr = Array.isArray(defs) ? defs : [defs];
+    for (const def of arr) this.musicTracks.set(def.id, def);
   }
 
   /** Play a one-shot sound effect.
@@ -334,6 +409,148 @@ export class SynthAudio {
     }
   }
 
+  // ── Music sequencer ──────────────────────────────────────────────
+
+  /** Start a music track (loops until stopped). */
+  startMusic(id: string): void {
+    if (this.activeTracks.has(id) || this._muted) return;
+    const def = this.musicTracks.get(id);
+    if (!def) return;
+
+    const ctx = this.ensureContext();
+    const now = ctx.currentTime;
+    const fadeIn = def.fadeIn ?? 3;
+    const vol = def.volume ?? 0.15;
+    const subdivision = def.subdivision ?? 4;
+    const stepDur = 60 / def.bpm / subdivision;
+
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(vol, now + fadeIn);
+    gainNode.connect(this.musicGain!);
+
+    const startTime = now + 0.05;
+    const state: MusicTrackState = {
+      gain: gainNode,
+      schedulerId: 0,
+      patternSteps: def.patterns.map(() => 0),
+      patternTimes: def.patterns.map(() => startTime),
+      stepDuration: stepDur,
+      def,
+    };
+
+    const lookahead = 0.15; // seconds
+    const schedule = () => {
+      const currentTime = ctx.currentTime;
+      for (let p = 0; p < def.patterns.length; p++) {
+        const pattern = def.patterns[p];
+        while (state.patternTimes[p] < currentTime + lookahead) {
+          const noteIndex = state.patternSteps[p] % pattern.notes.length;
+          const note = pattern.notes[noteIndex];
+          const durSec = note.dur * stepDur;
+          if (note.freq > 0) {
+            this.playMusicNote(ctx, def.voices[pattern.voice], note, state.patternTimes[p], durSec, gainNode);
+          }
+          state.patternTimes[p] += durSec;
+          state.patternSteps[p]++;
+        }
+      }
+    };
+
+    state.schedulerId = window.setInterval(schedule, 25);
+    schedule();
+    this.activeTracks.set(id, state);
+  }
+
+  /** Stop a music track with optional fade-out. */
+  stopMusic(id: string, fadeOut = 2): void {
+    const state = this.activeTracks.get(id);
+    if (!state) return;
+    this.activeTracks.delete(id);
+    clearInterval(state.schedulerId);
+
+    const ctx = this.ctx;
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    state.gain.gain.setValueAtTime(state.gain.gain.value, now);
+    state.gain.gain.linearRampToValueAtTime(0, now + fadeOut);
+    setTimeout(() => { state.gain.disconnect(); }, fadeOut * 1000 + 100);
+  }
+
+  /** Stop all music tracks. */
+  stopAllMusic(fadeOut = 2): void {
+    for (const id of this.activeTracks.keys()) {
+      this.stopMusic(id, fadeOut);
+    }
+  }
+
+  /** Schedule a single note on the Web Audio timeline. */
+  private playMusicNote(
+    ctx: AudioContext,
+    voice: MusicVoiceDef,
+    note: MusicNote,
+    startTime: number,
+    durationSec: number,
+    destination: GainNode,
+  ): void {
+    const vel = note.vel ?? 1;
+    const vGain = voice.gain ?? 1;
+    const env = voice.envelope;
+    const totalDur = durationSec + env.release;
+    const peak = vel * vGain;
+
+    // Envelope gain
+    const envGain = ctx.createGain();
+    const t0 = startTime;
+    envGain.gain.setValueAtTime(0, t0);
+    envGain.gain.linearRampToValueAtTime(peak, t0 + env.attack);
+    envGain.gain.linearRampToValueAtTime(peak * env.sustain, t0 + env.attack + env.decay);
+    envGain.gain.setValueAtTime(peak * env.sustain, t0 + durationSec);
+    envGain.gain.linearRampToValueAtTime(0, t0 + totalDur);
+
+    // Optional filter
+    let filterNode: BiquadFilterNode | null = null;
+    if (voice.filter) {
+      filterNode = ctx.createBiquadFilter();
+      filterNode.type = voice.filter.type;
+      filterNode.frequency.setValueAtTime(voice.filter.frequency, t0);
+      if (voice.filter.Q !== undefined) filterNode.Q.value = voice.filter.Q;
+      if (voice.filter.sweepTo !== undefined) {
+        filterNode.frequency.linearRampToValueAtTime(voice.filter.sweepTo, t0 + totalDur);
+      }
+    }
+
+    const target = filterNode ?? envGain;
+    if (filterNode) filterNode.connect(envGain);
+    envGain.connect(destination);
+
+    // Create oscillator / noise source
+    if (voice.wave === 'noise') {
+      const src = ctx.createBufferSource();
+      src.buffer = getNoiseBuffer(ctx);
+      src.loop = true;
+      src.connect(target);
+      src.start(t0);
+      src.stop(t0 + totalDur);
+    } else {
+      const osc = ctx.createOscillator();
+      osc.type = voice.wave;
+      osc.frequency.setValueAtTime(note.freq, t0);
+      if (voice.detune) osc.detune.setValueAtTime(voice.detune, t0);
+      osc.connect(target);
+      osc.start(t0);
+      osc.stop(t0 + totalDur);
+    }
+
+    // Auto-cleanup
+    const cleanupDelay = (t0 - ctx.currentTime + totalDur) * 1000 + 200;
+    setTimeout(() => {
+      envGain.disconnect();
+      filterNode?.disconnect();
+    }, Math.max(100, cleanupDelay));
+  }
+
   // ── Volume controls ─────────────────────────────────────────────
 
   get masterVolume(): number { return this._masterVolume; }
@@ -358,7 +575,10 @@ export class SynthAudio {
   set muted(v: boolean) {
     this._muted = v;
     if (this.masterGain) this.masterGain.gain.value = v ? 0 : this._masterVolume;
-    if (v) this.stopAllAmbient(0.5);
+    if (v) {
+      this.stopAllAmbient(0.5);
+      this.stopAllMusic(0.5);
+    }
   }
 
   /** Call on user gesture to ensure AudioContext is unlocked. */
@@ -369,6 +589,7 @@ export class SynthAudio {
   /** Dispose all resources. */
   dispose(): void {
     this.stopAllAmbient(0);
+    this.stopAllMusic(0);
     this.ctx?.close().catch(() => {});
     this.ctx = null;
     this.masterGain = null;
@@ -376,5 +597,6 @@ export class SynthAudio {
     this.musicGain = null;
     this.defs.clear();
     this.ambientLayers.clear();
+    this.musicTracks.clear();
   }
 }

@@ -29,7 +29,7 @@ import {
   spawnEnemy,
 } from './systems';
 import { drawJoystick } from './canvas-helpers';
-import { SFX, AMBIENT } from './sounds';
+import { SFX, MUSIC } from './sounds';
 
 export class NeonSurvivorsScene implements Scene {
   readonly name = 'neon-survivors';
@@ -100,7 +100,7 @@ export class NeonSurvivorsScene implements Scene {
     // Procedural audio
     this.audio = new SynthAudio();
     this.audio.register(SFX);
-    this.audio.registerAmbient(AMBIENT);
+    this.audio.registerMusic(MUSIC);
     this.gameState.onSfx = (id) => this.audio.play(id, 0.03);
 
     this.ui = new UIManager(
@@ -183,8 +183,7 @@ export class NeonSurvivorsScene implements Scene {
     this.initGame(this.gameCtx);
     this.screen = 'playing';
     this.ads.gameplayStart();
-    this.audio.startAmbient('space_drone');
-    this.audio.startAmbient('neon_shimmer');
+    this.audio.startMusic('cosmic_drift');
   }
 
   update(ctx: GameContext, dt: number): void {
@@ -430,6 +429,7 @@ export class NeonSurvivorsScene implements Scene {
   private goToMenu(): void {
     this.ads.gameplayStop();
     this.audio.stopAllAmbient(1);
+    this.audio.stopAllMusic(1);
     this.screen = 'menu';
     this.ui.screen = 'menu';
     this.ui.clickConsumed = true;
@@ -735,6 +735,7 @@ export class NeonSurvivorsScene implements Scene {
       this.camera.shake(8, 0.5);
       this.ads.gameplayStop();
       this.audio.stopAllAmbient(2);
+      this.audio.stopAllMusic(2);
       this.audio.play('game_over');
       this.submitScores(player);
       this.saveProgress();
@@ -747,6 +748,7 @@ export class NeonSurvivorsScene implements Scene {
       this.ads.gameplayStop();
       this.ads.happytime();
       this.audio.stopAllAmbient(2);
+      this.audio.stopAllMusic(2);
       this.audio.play('victory');
       this.submitScores(player);
       this.saveProgress();
