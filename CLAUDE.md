@@ -65,23 +65,28 @@ npm run build --workspace=games/<game-name>
 The engine is modular — each system is a standalone module with minimal coupling:
 
 - **ECS** (`ecs.ts`) — Entity-Component-System: `World`, `spawn`, `query`, `add`, `remove`.
+- **Game Context** (`game-context.ts`) — `GameContext` central entry point: wires loop, scenes, input, renderer, events, and stats.js panel together. Use `GameContext.create2D`, `GameContext.create3D`, or `GameContext.createCustom`.
 - **Game Loop** (`game-loop.ts`) — Fixed timestep with interpolated rendering.
 - **Scene Manager** (`scene.ts`) — Stack-based scene transitions.
 - **Renderers** (`renderer.ts`) — `IRenderer` interface with `Renderer2D`, `Renderer3D`, `NullRenderer`.
-- **Cameras** (`camera-2d.ts`, `camera-3d.ts`) — Follow, shake, screen-to-world transform.
+- **Cameras** (`camera-2d.ts`, `camera-3d.ts`) — Follow, shake, screen-to-world transform. (`camera.ts` is deprecated — use `Camera2D` instead.)
 - **Input** (`input.ts`) — Unified keyboard + touch with virtual joystick support.
 - **Audio** (`audio.ts`) — SFX, music, spatial audio via Howler.js.
+- **Synth Audio** (`synth-audio.ts`) — Procedural audio synthesis via Web Audio API. Zero audio files — sounds generated in real-time with ADSR envelopes, oscillator voices, filters, and pitch variation. Designed for retro/neon-style games.
+- **Events** (`events.ts`) — `TypedEventEmitter<T>` wrapping eventemitter3 for fully type-safe event handling across systems.
 - **AI** (`behavior-tree.ts`) — Behavior trees (sequence, selector, seek, flee, orbit).
 - **Networking** (`network.ts`) — Socket.io client with rooms, reconnect, latency tracking.
 - **Particles** (`particles.ts`) — Lightweight particle emitter.
 - **Spatial Hash** (`spatial-hash.ts`) — Spatial hash grid for O(n) broad-phase.
 - **Collision** (`collision.ts`) — Circle-circle, circle-AABB, point-in-shape collision primitives.
 - **Health & Damage** (`health.ts`) — `applyDamage`, `applyKnockback`, `createInvulnerabilitySystem`.
+- **Common Components** (`components.ts`) — Shared ECS component interfaces: `Pos`, `Vel`, `Health`, `Collider`, `DamageFlash`, `BehaviorTreeData`.
 - **Common Systems** (`systems.ts`) — `createMovementSystem`, `createLifetimeSystem`, `computeSeparation`.
 - **Canvas Drawing** (`canvas-draw.ts`) — `drawParticles`, `drawFloatingText`, `applyCameraToContext`, `drawJoystick`, `roundRect`, `drawButton`.
 - **Gravity** (`gravity.ts`) — Point gravity, tangential release, orbit detection.
 - **Math** (`math.ts`) — Vec2 and math utilities.
 - **Utilities** (`utils.ts`) — ObjectPool, FloatingTextManager.
+- **Cheats** (`cheats.ts`) — Dev-only cheat panel (HTML overlay): toggles, buttons, sliders, selects, and number inputs with pause integration.
 
 ### SDK (`packages/sdk`)
 

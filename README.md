@@ -8,6 +8,10 @@ A **game development monorepo** for creating and publishing multiple browser gam
 |------|-------|--------|----------|---------|
 | **Neon Survivors** | Vampire Survivors-style bullet hell | ✅ Live | Canvas 2D | Custom (ECS + spatial hash) |
 | **Neon Strike** | Top-down action shooter | 🚧 In Development | Canvas 2D | Custom (ECS + spatial hash) |
+| **Fall Vector** | Gravity-manipulation platformer | 🚧 In Development | Three.js (2D ortho) | Matter.js |
+| **Gravity Swoop** | Gravity-slingshot puzzle | 🚧 In Development | Canvas 2D | Custom (point gravity) |
+| **Neon Dash** | Auto-runner / rhythm platformer | 🚧 In Development | Canvas 2D | Custom |
+| **Neon Path** | Precision platformer + level editor | 🚧 In Development | Canvas 2D | Custom |
 
 ## 🚀 Quick Start
 
@@ -35,6 +39,10 @@ npm run dev
 # Run a specific game
 npm run dev:neon           # Neon Survivors
 npm run dev:neon-strike    # Neon Strike
+npm run dev:fall-vector    # Fall Vector
+npm run dev:gravity-swoop  # Gravity Swoop
+npm run dev:neon-dash      # Neon Dash
+npm run dev:neon-path      # Neon Path
 ```
 
 ### Build
@@ -46,6 +54,10 @@ npm run build
 # Build a specific game
 npm run build:neon
 npm run build:neon-strike
+npm run build:fall-vector
+npm run build:gravity-swoop
+npm run build:neon-dash
+npm run build:neon-path
 ```
 
 ### Preview Production Build
@@ -54,6 +66,10 @@ npm run build:neon-strike
 # Preview a specific game
 npm run preview:neon
 npm run preview:neon-strike
+npm run preview:fall-vector
+npm run preview:gravity-swoop
+npm run preview:neon-dash
+npm run preview:neon-path
 ```
 
 ## 📁 Project Structure
@@ -65,7 +81,11 @@ npm run preview:neon-strike
 │   └── server/     # @survivors/server — multiplayer server
 ├── games/
 │   ├── neon-survivors/  # Vampire Survivors-style bullet hell
-│   └──  neon-strike/    # Top-down action shooter
+│   ├── neon-strike/     # Top-down action shooter
+│   ├── fall-vector/     # Gravity-manipulation platformer
+│   ├── gravity-swoop/   # Gravity-slingshot puzzle
+│   ├── neon-dash/       # Auto-runner / rhythm platformer
+│   └── neon-path/       # Precision platformer + level editor
 ├── package.json         # npm workspaces root
 └── tsconfig.json        # shared TypeScript config
 ```
