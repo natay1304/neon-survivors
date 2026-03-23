@@ -725,6 +725,36 @@ export function spawnEnemy(world: World, playerPos: Pos, type: string, gameTime:
   }
 }
 
+// ─── ENEMY CULLING SYSTEM ────────────────────────────────────────────
+// Despawns enemies that drift far beyond the visible screen so they can
+// respawn fresh around the player via the normal wave system.
+export function createEnemyCullingSystem(getViewport: () => { width: number; height: number }) {
+  return (world: World, _dt: number) => {
+    const players = world.query(C.Player, C.Pos);
+    if (players.length === 0) return;
+    const pPos = world.get<Pos>(players[0], C.Pos);
+
+    const { width, height } = getViewport();
+    // Cull distance: screen half-diagonal + generous buffer so spawn edge isn't hit
+    const halfDiag = Math.sqrt(width * width + height * height) * 0.5;
+    const cullDist = halfDiag + 400;
+    const cullDistSq = cullDist * cullDist;
+
+    for (const e of world.query(C.Enemy, C.Pos)) {
+      const enemy = world.get<Enemy>(e, C.Enemy);
+      // Never cull bosses — they're scripted encounters
+      if (enemy.type === 'boss' || enemy.type === 'miniboss') continue;
+
+      const pos = world.get<Pos>(e, C.Pos);
+      const dx = pos.x - pPos.x;
+      const dy = pos.y - pPos.y;
+      if (dx * dx + dy * dy > cullDistSq) {
+        world.destroy(e);
+      }
+    }
+  };
+}
+
 // ─── DEATH SYSTEM ────────────────────────────────────────────────────
 export function createDeathSystem(particles: ParticleSystem, onSfx?: (id: string) => void) {
   return (world: World, dt: number) => {

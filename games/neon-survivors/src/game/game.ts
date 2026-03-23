@@ -25,6 +25,7 @@ import {
   createWaveSwarmSystem,
   createCircleEventSystem,
   createCircleSystem,
+  createEnemyCullingSystem,
   spawnEnemy,
 } from './systems';
 import { drawJoystick } from './canvas-helpers';
@@ -224,6 +225,11 @@ export class NeonSurvivorsScene implements Scene {
     const vis = this.world.get<Visual>(this.playerId, C.Visual);
     if (ctx.input.isAiming) {
       vis.rotation = Math.atan2(ctx.input.aimDir.y, ctx.input.aimDir.x) + Math.PI / 2;
+      // On mobile: sync lastDir with aim joystick so direction is preserved when released
+      if (ctx.input.isMobile) {
+        player.lastDirX = ctx.input.aimDir.x;
+        player.lastDirY = ctx.input.aimDir.y;
+      }
     } else {
       vis.rotation = Math.atan2(player.lastDirY, player.lastDirX) + Math.PI / 2;
     }
@@ -352,6 +358,7 @@ export class NeonSurvivorsScene implements Scene {
     this.world.addSystem(createCollisionSystem(this.spatialHash, this.particles, this.floatingText, onSfx));
     this.world.addSystem(createPickupSystem(this.particles, this.floatingText, onSfx));
     this.world.addSystem(createDeathSystem(this.particles, onSfx));
+    this.world.addSystem(createEnemyCullingSystem(() => ({ width: this.camera.width, height: this.camera.height })));
     this.world.addSystem(createWaveSystem(this.gameState));
     this.world.addSystem(createWaveSwarmEventSystem(this.gameState));
     this.world.addSystem(createWaveSwarmSystem());
