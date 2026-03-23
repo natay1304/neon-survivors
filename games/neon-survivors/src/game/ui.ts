@@ -757,40 +757,42 @@ export class UIManager {
       }
     }
 
-    // Restart button
-    const btnW = 200, btnH = 44;
-    const btnX = w / 2 - btnW / 2;
-    const btnY = this.canRevive ? h / 2 + 150 : h / 2 + 100;
-    if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
-      this.onRestart();
-      return;
-    }
-
-    // Share button
-    if (this.shareData && this.onShare) {
-      const shareW = 200, shareH = 38;
-      const shareX = w / 2 - shareW / 2;
-      const shareY = btnY + btnH + 14;
-      if (x >= shareX && x <= shareX + shareW && y >= shareY && y <= shareY + shareH) {
-        const d = this.shareData;
-        const strings = t();
-        const text = d.victory
-          ? strings.shareVictory(d.level, d.kills, d.time)
-          : strings.shareDeath(d.level, d.kills, d.time);
-        this.onShare(text);
+    // Game-over / victory buttons (Restart, Share, Main menu)
+    if (this.screen === 'gameover' || this.screen === 'victory') {
+      const btnW = 200, btnH = 44;
+      const btnX = w / 2 - btnW / 2;
+      const btnY = this.canRevive ? h / 2 + 150 : h / 2 + 100;
+      if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
+        this.onRestart();
         return;
       }
-    }
 
-    // Main menu button (below share)
-    if (this.onMainMenu) {
-      const shareY = btnY + btnH + 14;
-      const menuW = 200, menuH = 38;
-      const menuX = w / 2 - menuW / 2;
-      const menuY = shareY + 38 + 10;
-      if (x >= menuX && x <= menuX + menuW && y >= menuY && y <= menuY + menuH) {
-        this.onMainMenu();
-        return;
+      // Share button
+      if (this.shareData && this.onShare) {
+        const shareW = 200, shareH = 38;
+        const shareX = w / 2 - shareW / 2;
+        const shareY = btnY + btnH + 14;
+        if (x >= shareX && x <= shareX + shareW && y >= shareY && y <= shareY + shareH) {
+          const d = this.shareData;
+          const strings = t();
+          const text = d.victory
+            ? strings.shareVictory(d.level, d.kills, d.time)
+            : strings.shareDeath(d.level, d.kills, d.time);
+          this.onShare(text);
+          return;
+        }
+      }
+
+      // Main menu button (below share)
+      if (this.onMainMenu) {
+        const shareY = btnY + btnH + 14;
+        const menuW = 200, menuH = 38;
+        const menuX = w / 2 - menuW / 2;
+        const menuY = shareY + 38 + 10;
+        if (x >= menuX && x <= menuX + menuW && y >= menuY && y <= menuY + menuH) {
+          this.onMainMenu();
+          return;
+        }
       }
     }
   }
