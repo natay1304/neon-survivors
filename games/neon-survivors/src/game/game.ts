@@ -466,17 +466,18 @@ export class NeonSurvivorsScene implements Scene {
         : window.location.href;
     const fullText = `${text}\n${gameUrl}`;
 
-    // Telegram Mini App: use share link via openTelegramLink
+    // Telegram Mini App: use share link
     if (isTelegram && window.Telegram?.WebApp) {
       try {
         const tg = window.Telegram.WebApp as any;
-        const encoded = encodeURIComponent(fullText);
-        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(gameUrl)}&text=${encoded}`;
-        if (tg.openTelegramLink) {
+        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(gameUrl)}&text=${encodeURIComponent(text)}`;
+        if (typeof tg.openTelegramLink === 'function') {
           tg.openTelegramLink(shareUrl);
-          return;
+        } else if (typeof tg.openLink === 'function') {
+          tg.openLink(shareUrl);
+        } else {
+          window.open(shareUrl, '_blank');
         }
-        window.open(shareUrl, '_blank');
         return;
       } catch { /* fallback below */ }
     }

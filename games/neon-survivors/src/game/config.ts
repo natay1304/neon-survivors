@@ -113,7 +113,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
   skeleton: { name: 'Skeleton', hp: 50,   speed: 85,  damage: 15, xp: 3, color: '#ccbb88', size: 13, shape: 'star4',    unlockTime: 90,  weight: 6 },
   ghost:    { name: 'Ghost',    hp: 25,   speed: 135, damage: 8,  xp: 2, color: '#88bbff', size: 11, shape: 'triangle', unlockTime: 150, weight: 5 },
   demon:    { name: 'Demon',    hp: 100,  speed: 40,  damage: 25, xp: 5, color: '#ff4400', size: 16, shape: 'spike',    unlockTime: 240, weight: 3 },
-  warlock:  { name: 'Warlock',  hp: 60,   speed: 65,  damage: 20, xp: 4, color: '#ff3366', size: 13, shape: 'hexagon',  unlockTime: 20,  weight: 4 },
+  warlock:  { name: 'Warlock',  hp: 60,   speed: 65,  damage: 10, xp: 4, color: '#ff3366', size: 13, shape: 'hexagon',  unlockTime: 20,  weight: 4 },
   // Wave/circle event enemy types (weight: 0 — spawned by event system, not regular waves)
   swarm:    { name: 'Swarm',    hp: 20,   speed: 250, damage: 12, xp: 1, color: '#ff8800', size: 8,  shape: 'triangle', unlockTime: 0,   weight: 0 },
   ring:     { name: 'Ring',     hp: 25,   speed: 0,   damage: 15, xp: 1, color: '#44aaff', size: 9,  shape: 'diamond',  unlockTime: 0,   weight: 0 },

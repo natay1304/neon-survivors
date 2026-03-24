@@ -173,8 +173,8 @@ export class UIManager {
 
   private drawSoundButton(w: number, s: number): void {
     const ctx = this.ctx;
-    const lBtnW = Math.max(38, Math.round(46 * s));
-    const lBtnH = Math.max(26, Math.round(30 * s));
+    const lBtnW = Math.max(42, Math.round(50 * s));
+    const lBtnH = Math.max(30, Math.round(34 * s));
     const lGap = 4;
     const lTotalW = lBtnW * 2 + lGap;
     const btnW = lBtnH; // square, same height as lang buttons
@@ -190,10 +190,11 @@ export class UIManager {
     ctx.lineWidth = 1;
     ctx.strokeRect(bx, by, btnW, btnH);
 
-    // Draw speaker icon centered in button
-    const cx = bx + btnW / 2 - 1; // shift left slightly to visually center with waves
-    const cy = by + btnH / 2;
+    // Icon spans: left edge = cx - sz*0.5, right edge ≈ cx + sz*1.35 (outer wave)
+    // Visual center ≈ cx + sz*0.42 — shift cx left so visual center = button center
     const sz = Math.min(btnW, btnH) * 0.32;
+    const cx = bx + btnW / 2 - sz * 0.42;
+    const cy = by + btnH / 2;
 
     ctx.fillStyle = muted ? '#ff4444' : '#888899';
     ctx.strokeStyle = muted ? '#ff4444' : '#888899';

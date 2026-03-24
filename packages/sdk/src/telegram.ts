@@ -44,14 +44,7 @@ export class TelegramPlatform implements AdPlatform {
   }
 
   async showInterstitial(): Promise<void> {
-    if (!this.adController) return;
-    try {
-      // Adsgram show() returns a promise that resolves when ad is closed
-      await this.adController.show();
-    } catch (e) {
-      // User closed ad or ad failed — both are fine
-      console.warn('[SDK] TG interstitial error:', e);
-    }
+    // Telegram: no interstitials — ads only via rewarded (revive)
   }
 
   async showRewarded(): Promise<boolean> {
