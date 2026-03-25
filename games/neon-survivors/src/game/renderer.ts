@@ -83,7 +83,7 @@ export class GameRenderer {
     this.planets = getSharedPlanets();
   }
 
-  render(world: World, gameTime: number, _state: string): void {
+  render(world: World, _gameTime: number, _state: string): void {
     const ctx = this.ctx;
     const w = this.camera.width;
     const h = this.camera.height;
