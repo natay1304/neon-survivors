@@ -415,9 +415,14 @@ export class NeonSurvivorsScene implements Scene {
     this.ads.gameplayStop();
     this.audio.stopAllAmbient(1);
     this.audio.stopAllMusic(1);
-    this.screen = 'menu';
-    this.ui.screen = 'menu';
-    this.ui.clickConsumed = true;
+
+    // Show interstitial before returning to menu
+    this.screen = 'loading';
+    this.ads.showInterstitial().catch(() => {}).finally(() => {
+      this.screen = 'menu';
+      this.ui.screen = 'menu';
+      this.ui.clickConsumed = true;
+    });
   }
 
   private revive(): void {
