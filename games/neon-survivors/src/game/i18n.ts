@@ -15,7 +15,7 @@ const STRINGS = {
     // Mode selection
     modeClassic:       'CLASSIC (10 MIN)',
     modeEndless:       'ENDLESS SURVIVAL',
-    modeClassicDesc:   'Survive 10 minutes to win. NG+ after victory.',
+    modeClassicDesc:   'Survive 10 minutes to win.',
     modeEndlessDesc:   'No timer. Play until you die.',
     nextRun:           'Next run:',
     // Level up
@@ -87,7 +87,7 @@ const STRINGS = {
     // Mode selection
     modeClassic:       'КЛАССИКА (10 МИН)',
     modeEndless:       'БЕСКОНЕЧНОЕ ВЫЖИВАНИЕ',
-    modeClassicDesc:   'Выживи 10 минут для победы. NG+ после победы.',
+    modeClassicDesc:   'Выживи 10 минут для победы.',
     modeEndlessDesc:   'Без таймера. Играй пока не погибнешь.',
     nextRun:           'Следующий забег:',
     // Level up
@@ -144,7 +144,7 @@ const STRINGS = {
   },
 } as const;
 
-type Strings = typeof STRINGS.en;
+type Strings = typeof STRINGS[keyof typeof STRINGS];
 
 function savedLocale(): Locale {
   try {

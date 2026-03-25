@@ -53,7 +53,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     description: 'Strikes a random nearby enemy',
     color: '#ffff44',
     glow: '#ffcc00',
-    icon: '⚡',
+    icon: '⚡️',
     levels: [
       { damage: 40, cooldown: 1.28, count: 1, speed: 0, pierce: 1, size: 300, knockback: 0 },
       { damage: 55, cooldown: 1.11, count: 1, speed: 0, pierce: 1, size: 350, knockback: 0 },
