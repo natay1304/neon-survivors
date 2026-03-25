@@ -114,6 +114,15 @@ export class NeonSurvivorsScene implements Scene {
     this.ui.setMainMenuHandler(() => this.goToMenu());
     this.ui.setPlayHandler(() => this.startGame());
     this.ui.setToggleSoundHandler(() => this.toggleSound());
+    this.ui.setPauseHandler(() => {
+      if (this.screen === 'playing') {
+        this.screen = 'paused';
+        this.ads.gameplayStop();
+      } else if (this.screen === 'paused') {
+        this.screen = 'playing';
+        this.ads.gameplayStart();
+      }
+    });
     this.ui.enableTracking();
 
     // Restore mute state
@@ -248,33 +257,19 @@ export class NeonSurvivorsScene implements Scene {
     const dpr = window.devicePixelRatio || 1;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-
     this.ui.screen = this.screen;
-    switch (this.screen) {
-      case 'menu':
-        this.renderer.render(this.world, this.gameTime, this.screen);
-        this.ui.drawMenu(w, h, ctx.input.isMobile);
-        break;
-      case 'playing':
-        this.renderer.render(this.world, this.gameTime, this.screen);
-        break;
-      case 'levelup':
-        this.renderer.render(this.world, this.gameTime, this.screen);
-        this.ui.drawLevelUp(w, h);
-        break;
-      case 'gameover':
-      case 'victory': {
-        this.renderer.render(this.world, this.gameTime, this.screen);
-        const player = this.world.get<Player>(this.playerId, C.Player);
-        this.ui.drawGameOver(w, h, player, this.gameTime, this.screen === 'victory');
-        break;
-      }
-      case 'paused':
-        this.renderer.render(this.world, this.gameTime, this.screen);
-        this.ui.drawPaused(w, h);
-        break;
+    this.renderer.render(this.world, this.gameTime, this.screen);
+
+    if (this.screen === 'gameover' || this.screen === 'victory') {
+      const player = this.world.get<Player>(this.playerId, C.Player);
+      this.ui.drawGameOver(0, 0, player, this.gameTime, this.screen === 'victory');
+    }
+
+    if (this.screen === 'playing' && this.playerId >= 0) {
+      const player = this.world.get<Player>(this.playerId, C.Player);
+      const hp = this.world.get<Health>(this.playerId, C.Health);
+      const enemyCount = this.world.count(C.Enemy);
+      this.ui.updateHUD(player, hp, enemyCount, this.gameTime, this.gameMode);
     }
 
     // Joysticks (screen space, mobile only)
@@ -390,27 +385,17 @@ export class NeonSurvivorsScene implements Scene {
 
   private restart(): void {
     this.gamesPlayed++;
-    const showAd = this.gamesPlayed % 3 === 0;
+    // Pause everything before showing ad
+    this.screen = 'loading';
+    this.ads.gameplayStop();
 
-    if (showAd) {
-      // Pause everything before showing ad
-      this.screen = 'loading';
-      this.ads.gameplayStop();
-
-      this.ads.showInterstitial().catch(() => {}).finally(() => {
-        if (this.gameCtx) {
-          this.initGame(this.gameCtx);
-          this.screen = 'playing';
-          this.ads.gameplayStart();
-        }
-      });
-    } else {
+    this.ads.showInterstitial().catch(() => {}).finally(() => {
       if (this.gameCtx) {
         this.initGame(this.gameCtx);
         this.screen = 'playing';
         this.ads.gameplayStart();
       }
-    }
+    });
   }
 
   private resumeGame(): void {
