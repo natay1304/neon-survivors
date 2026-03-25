@@ -47,10 +47,12 @@ export class YandexPlatform implements AdPlatform {
     if (!this.ysdk) return Promise.resolve();
     return new Promise((resolve) => {
       this.ysdk!.adv.showFullscreenAdv({
-        open: () => console.log('[SDK] YA interstitial opened'),
-        close: () => { console.log('[SDK] YA interstitial closed'); resolve(); },
-        offline: () => { console.log('[SDK] YA offline'); resolve(); },
-        error: (err) => { console.warn('[SDK] YA interstitial error:', err); resolve(); },
+        callbacks: {
+          onOpen: () => console.log('[SDK] YA interstitial opened'),
+          onClose: () => { console.log('[SDK] YA interstitial closed'); resolve(); },
+          onOffline: () => { console.log('[SDK] YA offline'); resolve(); },
+          onError: (err) => { console.warn('[SDK] YA interstitial error:', err); resolve(); },
+        },
       });
     });
   }
@@ -60,10 +62,12 @@ export class YandexPlatform implements AdPlatform {
     return new Promise((resolve) => {
       let rewarded = false;
       this.ysdk!.adv.showRewardedVideo({
-        open: () => console.log('[SDK] YA rewarded opened'),
-        rewarded: () => { rewarded = true; },
-        close: () => { console.log('[SDK] YA rewarded closed'); resolve(rewarded); },
-        error: (err) => { console.warn('[SDK] YA rewarded error:', err); resolve(false); },
+        callbacks: {
+          onOpen: () => console.log('[SDK] YA rewarded opened'),
+          onRewarded: () => { rewarded = true; },
+          onClose: () => { console.log('[SDK] YA rewarded closed'); resolve(rewarded); },
+          onError: (err) => { console.warn('[SDK] YA rewarded error:', err); resolve(false); },
+        },
       });
     });
   }

@@ -57,16 +57,20 @@ interface YandexPlayer {
 interface YandexSDK {
   adv: {
     showFullscreenAdv(params: {
-      open?: () => void;
-      close?: (wasShown: boolean) => void;
-      offline?: () => void;
-      error?: (error: unknown) => void;
+      callbacks: {
+        onOpen?: () => void;
+        onClose?: (wasShown: boolean) => void;
+        onOffline?: () => void;
+        onError?: (error: unknown) => void;
+      };
     }): void;
     showRewardedVideo(params: {
-      open?: () => void;
-      rewarded?: () => void;
-      close?: () => void;
-      error?: (error: unknown) => void;
+      callbacks: {
+        onOpen?: () => void;
+        onRewarded?: () => void;
+        onClose?: () => void;
+        onError?: (error: unknown) => void;
+      };
     }): void;
   };
   features: {
