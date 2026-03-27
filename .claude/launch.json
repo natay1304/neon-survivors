@@ -18,6 +18,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace=games/neon-path"],
       "port": 5178
+    },
+    {
+      "name": "clicker",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=games/clicker"],
+      "port": 5176
     }
   ]
 }

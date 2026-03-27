@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 ## Project Overview
 
@@ -13,8 +13,12 @@ This is a **game development monorepo** for creating and publishing multiple bro
 │   └── server/     # @survivors/server — multiplayer server (socket.io, rooms, state sync)
 ├── games/
 │   ├── neon-survivors/  # Vampire Survivors-style bullet hell game
+│   ├── neon-strike/     # Top-down arena shooter
 │   ├── fall-vector/     # Gravity-manipulation platformer (Matter.js + Three.js)
-│   └── gravity-swoop/   # Gravity-slingshot puzzle game (Canvas 2D)
+│   ├── gravity-swoop/   # Gravity-slingshot puzzle game (Canvas 2D)
+│   ├── neon-dash/       # Infinite side-scroller / auto-runner
+│   ├── neon-path/       # Precision 2D platformer with level editor
+│   └── clicker/         # Incremental clicker with evolution stages
 ├── package.json         # npm workspaces root
 └── tsconfig.json        # shared TypeScript config
 ```
@@ -39,15 +43,37 @@ This is a **game development monorepo** for creating and publishing multiple bro
 
 ```bash
 # From repo root:
-npm install                # install all workspace dependencies
-npm run dev                # dev server for neon-survivors (default)
-npm run dev:neon           # dev server for neon-survivors
-npm run dev:fall-vector    # dev server for fall-vector
-npm run dev:gravity-swoop  # dev server for gravity-swoop
-npm run build              # production build for all games
-npm run build:neon         # production build for neon-survivors
-npm run build:fall-vector  # production build for fall-vector
-npm run build:gravity-swoop # production build for gravity-swoop
+npm install                  # install all workspace dependencies
+
+# Dev servers:
+npm run dev                  # dev server for neon-survivors (default)
+npm run dev:neon             # dev server for neon-survivors
+npm run dev:neon-strike      # dev server for neon-strike
+npm run dev:fall-vector      # dev server for fall-vector
+npm run dev:gravity-swoop    # dev server for gravity-swoop
+npm run dev:neon-dash        # dev server for neon-dash
+npm run dev:neon-path        # dev server for neon-path
+npm run dev:clicker          # dev server for clicker
+
+# Production builds:
+npm run build                # build all games (alias for build:all)
+npm run build:all            # build all 7 games sequentially
+npm run build:neon           # production build for neon-survivors
+npm run build:neon-strike    # production build for neon-strike
+npm run build:fall-vector    # production build for fall-vector
+npm run build:gravity-swoop  # production build for gravity-swoop
+npm run build:neon-dash      # production build for neon-dash
+npm run build:neon-path      # production build for neon-path
+npm run build:clicker        # production build for clicker
+
+# Preview builds:
+npm run preview:neon
+npm run preview:neon-strike
+npm run preview:fall-vector
+npm run preview:gravity-swoop
+npm run preview:neon-dash
+npm run preview:neon-path
+npm run preview:clicker
 
 # Server (packages/server):
 npm run dev --workspace=packages/server    # dev server with watch
@@ -91,6 +117,8 @@ The engine is modular — each system is a standalone module with minimal coupli
 ### SDK (`packages/sdk`)
 
 Platform abstraction with auto-detection. Each platform implements `AdPlatform` interface. `NoopPlatform` fallback when no platform SDK is loaded. Games call a single API regardless of deployment target.
+
+Supported platforms: CrazyGames, Yandex Games, Telegram.
 
 ### Game Structure Pattern
 
@@ -148,6 +176,12 @@ You are an expert in game development, 2D and 3D systems on the web, multiplayer
 
 ### Use npm Packages
 
+**Before implementing any logic, search npm first.** This is mandatory — do not start writing custom code until you have verified that no suitable package exists. Steps:
+
+1. Search npm (`npmjs.com` or `npm search`) for relevant packages.
+2. Evaluate the top results for activity, downloads, and TypeScript support.
+3. Only if no suitable package exists, implement custom logic.
+
 **Always prefer battle-tested npm packages** over writing custom implementations. Do not reinvent:
 
 - Physics engines — use rapier, cannon-es, matter-js.
@@ -172,6 +206,12 @@ Performance must not degrade with each release. Follow these rules:
 - **Measure frame time** — any system that takes >2ms per frame on mid-range hardware needs optimization.
 - **Lazy initialization** — don't create what isn't needed yet.
 - When adding new systems or features, verify that frame rate stays at 60fps on target hardware.
+
+### Renderer Choice
+
+- **Canvas 2D** — use for games with purely procedural/geometric visuals (shapes, glows, particles drawn in code).
+- **Three.js** — use for any game that loads or renders external assets (sprite sheets, textures, 3D models, tilemaps). Three.js provides hardware-accelerated batching, texture management, and a mature asset pipeline that Canvas 2D cannot match at scale.
+- When in doubt: if the game has a `public/assets/` folder with image or model files, use Three.js.
 
 ### Modularity
 
@@ -255,9 +295,11 @@ When implementing multiplayer features:
 
 ### CI/CD and Multi-Project Pipelines
 
-- GitHub Actions deploys neon-survivors to GitHub Pages on push to `main`.
+- GitHub Actions deploys **only `neon-survivors`** to GitHub Pages on push to `main`.
+- The workflow builds via `build:neon`, copies `games/neon-survivors/dist/*` → `dist/`, and deploys with `actions/deploy-pages@v4`.
+- All other games build locally only — no deploy pipelines exist for them yet.
 - Build scripts must work per-workspace: `npm run build --workspace=games/<name>`.
-- When adding a new game, add corresponding `build:<name>` and `dev:<name>` scripts to root `package.json`.
+- When adding a new game, add corresponding `build:<name>`, `dev:<name>`, and `preview:<name>` scripts to root `package.json`, and add the game to `build:all`.
 - Keep build times fast — avoid unnecessary rebuilds of unchanged packages.
 
 ## Adding a New Game
@@ -268,14 +310,18 @@ When implementing multiplayer features:
 4. Add `tsconfig.json` extending root config with appropriate paths.
 5. **Optional: Use Figma MCP** — If designs exist in Figma, use `mcp_figma_*` tools to extract design tokens (colors, spacing, typography) into `config.ts`.
 6. The game imports from `@survivors/core` and `@survivors/sdk` — no direct file path imports to packages.
-7. Add `build:<name>` and `dev:<name>` scripts to root `package.json`.
+7. Add `build:<name>`, `dev:<name>`, and `preview:<name>` scripts to root `package.json`, and include the game in `build:all`.
 8. Use shared core modules (`canvas-draw`, `collision`, `health`, `systems`) for common mechanics instead of reimplementing them.
 9. **Optional: Use Chrome MCP** — Set up automated testing with `mcp_io_github_chr_*` tools for regression testing and performance validation.
 
 ## Existing Games
 
-| Game | Genre | Renderer | Physics |
-|------|-------|----------|---------|
-| **neon-survivors** | Vampire Survivors-style bullet hell | Canvas 2D | Custom (ECS + spatial hash) |
-| **fall-vector** | Gravity-manipulation platformer | Three.js (2D ortho) | Matter.js |
-| **gravity-swoop** | Gravity-slingshot puzzle | Canvas 2D | Custom (point gravity) |
+| Game | Genre | Renderer | Physics | Extra deps |
+|------|-------|----------|---------|------------|
+| **neon-survivors** | Vampire Survivors-style bullet hell | Canvas 2D | Custom (ECS + spatial hash) | — |
+| **neon-strike** | Top-down arena shooter | Canvas 2D | Custom (ECS + spatial hash) | — |
+| **fall-vector** | Gravity-manipulation platformer | Three.js (2D ortho) | Matter.js | `matter-js` |
+| **gravity-swoop** | Gravity-slingshot puzzle | Canvas 2D | Custom (point gravity) | — |
+| **neon-dash** | Infinite side-scroller / auto-runner | Canvas 2D | Custom (gravity + scroll) | — |
+| **neon-path** | Precision 2D platformer + level editor | Canvas 2D | Custom | — |
+| **clicker** | Incremental clicker — evolution stages | Canvas 2D | N/A | — |
