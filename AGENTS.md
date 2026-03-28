@@ -149,6 +149,7 @@ games/<name>/
 - **No default exports** — use named exports for clarity.
 - **ECS pattern** — game logic lives in systems that operate on components via queries. Components are plain data objects. Systems are pure functions where possible.
 - **Flat module structure** — each core module exports from a single file. No deep nesting.
+- **UI must be HTML** — always implement UI (menus, HUD, overlays, dialogs, buttons) using HTML/CSS elements. Never render UI on the game canvas.
 
 ## Rules for the Agent
 
