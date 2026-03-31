@@ -19,6 +19,10 @@ async function main() {
   ctx.scenes.push('neon-survivors', ctx);
 
   ctx.start();
+
+  // Signal to platform that game is fully loaded and ready (Yandex LoadingAPI.ready)
+  platform.gameReady();
+
   (window as any).__game = ctx;
 }
 

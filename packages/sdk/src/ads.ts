@@ -17,6 +17,8 @@ export interface AdPlatform {
   showRewarded(): Promise<boolean>;
   gameplayStart(): void;
   gameplayStop(): void;
+  /** Signal that game has loaded all resources and is ready for interaction */
+  gameReady(): void;
   happytime(): void;
   /** Returns platform language code (e.g. 'ru', 'en') or null if unavailable */
   getLanguage(): string | null;
@@ -39,6 +41,7 @@ export class NoopPlatform implements AdPlatform {
   async showRewarded() { return false; }
   gameplayStart() {}
   gameplayStop() {}
+  gameReady() {}
   happytime() {}
   getLanguage() { return null; }
   async savePlayerData() {}

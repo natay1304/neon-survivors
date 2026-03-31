@@ -24,6 +24,7 @@ const CSS = `
   pointer-events: none;
   font-family: monospace;
   z-index: 100;
+  overflow: hidden;
 }
 .ui-screen {
   position: absolute;

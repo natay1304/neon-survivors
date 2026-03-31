@@ -74,6 +74,9 @@ interface YandexSDK {
     }): void;
   };
   features: {
+    LoadingAPI?: {
+      ready(): void;
+    };
     GameplayAPI?: {
       start(): void;
       stop(): void;

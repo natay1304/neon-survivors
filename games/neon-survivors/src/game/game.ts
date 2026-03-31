@@ -84,9 +84,14 @@ export class NeonSurvivorsScene implements Scene {
   };
 
   private onVisibilityChange = () => {
-    if (document.hidden && this.screen === 'playing') {
-      this.screen = 'paused';
-      this.ads.gameplayStop();
+    if (document.hidden) {
+      this.audio.suspend();
+      if (this.screen === 'playing') {
+        this.screen = 'paused';
+        this.ads.gameplayStop();
+      }
+    } else {
+      this.audio.resume();
     }
   };
 
@@ -185,6 +190,7 @@ export class NeonSurvivorsScene implements Scene {
   private startGame(): void {
     if (this.screen !== 'menu' || !this.gameCtx) return;
     this.audio.unlock();
+    this.audio.resume();
     this.gameMode = this.ui.selectedMode;
     this.gameState.gameMode = this.gameMode;
     this.gameState.ngPlusLevel = this.gameMode === 'classic' ? this.ngPlusLevel : 0;

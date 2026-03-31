@@ -39,6 +39,7 @@ export class CrazyGamesPlatform implements AdPlatform {
 
   gameplayStart(): void { this.sdk?.game.gameplayStart(); }
   gameplayStop(): void { this.sdk?.game.gameplayStop(); }
+  gameReady(): void { this.sdk?.game.loadingStop(); }
   happytime(): void { this.sdk?.game.happytime(); }
   getLanguage() { return null; }
   async savePlayerData() {}

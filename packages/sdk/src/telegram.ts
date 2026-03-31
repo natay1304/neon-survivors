@@ -59,6 +59,7 @@ export class TelegramPlatform implements AdPlatform {
 
   gameplayStart(): void {}
   gameplayStop(): void {}
+  gameReady(): void {}
   happytime(): void {
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
   }

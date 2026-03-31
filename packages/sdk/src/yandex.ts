@@ -74,6 +74,7 @@ export class YandexPlatform implements AdPlatform {
 
   gameplayStart(): void { this.ysdk?.features.GameplayAPI?.start(); }
   gameplayStop(): void { this.ysdk?.features.GameplayAPI?.stop(); }
+  gameReady(): void { this.ysdk?.features.LoadingAPI?.ready(); }
   happytime(): void { /* Yandex has no happytime equivalent */ }
 
   getLanguage(): string | null {

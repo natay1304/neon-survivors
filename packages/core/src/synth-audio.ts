@@ -586,6 +586,17 @@ export class SynthAudio {
     this.ensureContext();
   }
 
+  /** Suspend AudioContext — stops all audio processing (use on tab hide / minimize). */
+  suspend(): void {
+    this.ctx?.suspend().catch(() => {});
+  }
+
+  /** Resume AudioContext — restarts audio processing (use on tab show / restore). */
+  resume(): void {
+    if (this._muted) return;
+    this.ctx?.resume().catch(() => {});
+  }
+
   /** Dispose all resources. */
   dispose(): void {
     this.stopAllAmbient(0);
