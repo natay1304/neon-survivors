@@ -5,6 +5,8 @@ import { C, Pos, Health, Visual, Player, LightningData, Bonus } from './componen
 import { WEAPONS, type GameMode } from './config';
 import { drawParticles, drawFloatingText, applyCameraToContext } from './canvas-helpers';
 
+import { t } from './i18n';
+
 const GRID_SIZE = 64;
 const BG_COLOR = '#0a0a1a';
 
@@ -404,7 +406,14 @@ export class GameRenderer {
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'center';
-      const label = bonus.type === 'heal' ? 'HP' : bonus.type === 'magnet' ? 'MAG' : bonus.type === 'bomb' ? 'DMG' : 'SPD';
+      const strings = t();
+      const bonusLabels: Record<string, string> = {
+        heal: strings.bonusHeal,
+        magnet: strings.bonusMagnet,
+        bomb: strings.bonusBomb,
+        speed: strings.bonusSpeed,
+      };
+      const label = bonusLabels[bonus.type] ?? bonus.type.toUpperCase();
       ctx.fillText(label, 0, vis.size + 16);
 
       ctx.restore();

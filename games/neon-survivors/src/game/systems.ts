@@ -4,6 +4,7 @@ import { Vec2, randomAngle, randomRange, clamp, World, Entity, InputManager, Spa
 import { C, Pos, Vel, Health, Collider, Player, Enemy, Projectile, XPGem, Visual, LightningData, Bonus, type BehaviorTreeData, type EnemyProjectile, type EnemySpin, type WaveSwarmMember, type CircleMember } from './components';
 import { WEAPONS, ENEMIES, ENEMY_SPAWN_DISTANCE, MAX_ENEMIES, MAX_ENEMIES_ENDLESS, GAME_DURATION, BOSS_TIMES, MINIBOSS_TIMES, NG_PLUS, type GameMode } from './config';
 import { ENEMY_TREES, simpleLODTree } from './enemy-behaviors';
+import { t } from './i18n';
 
 const FIRE_COLORS = ['#ff6600', '#ff8822', '#ffaa00', '#ff4400', '#ffcc33'];
 
@@ -987,13 +988,14 @@ export function createBonusPickupSystem(
       if (dx * dx + dy * dy < 30 * 30) {
         addBuff(player, bonus.type);
 
-        const labels: Record<string, [string, string]> = {
-          heal: ['REGEN!', '#ff4466'],
-          magnet: ['MAGNET!', '#44ff88'],
-          bomb: ['BOOM!', '#ff8800'],
-          speed: ['SPEED!', '#44ccff'],
+        const strings = t();
+        const bonusFloatingText: Record<string, [string, string]> = {
+          heal:   [strings.bonusRegenText,  '#ff4466'],
+          magnet: [strings.bonusMagnetText, '#44ff88'],
+          bomb:   [strings.bonusBombText,   '#ff8800'],
+          speed:  [strings.bonusSpeedText,  '#44ccff'],
         };
-        const [text, color] = labels[bonus.type] ?? ['BUFF!', '#ffffff'];
+        const [text, color] = bonusFloatingText[bonus.type] ?? [strings.bonusBuffText, '#ffffff'];
         floatingText.add(bPos.x, bPos.y - 10, text, color, 0.8, 16);
         particles.emit(bPos.x, bPos.y, 12, { color: vis?.color ?? '#ffffff', speed: 120, life: 0.3, size: 4 });
         onSfx?.('bonus_pickup');

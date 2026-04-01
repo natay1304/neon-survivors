@@ -59,6 +59,17 @@ const STRINGS = {
       `\ud83c\udfc6 I beat Neon Survivors! Level ${level}, ${kills} kills in ${time}! Can you survive? \ud83d\ude80`,
     shareDeath: (level: number, kills: number, time: string) =>
       `\ud83d\udc80 I survived ${time} in Neon Survivors! Level ${level}, ${kills} kills. Can you beat me? \ud83d\ude80`,
+    // Bonus pickup labels
+    bonusHeal:        'HP',
+    bonusMagnet:      'MAG',
+    bonusBomb:        'DMG',
+    bonusSpeed:       'SPD',
+    // Bonus pickup floating text
+    bonusRegenText:   'REGEN!',
+    bonusMagnetText:  'MAGNET!',
+    bonusBombText:    'BOOM!',
+    bonusSpeedText:   'SPEED!',
+    bonusBuffText:    'BUFF!',
     // Weapon names & descriptions
     weapons: {
       magic_orb: { name: 'Magic Orb',    description: 'Fires orbs in your direction' },
@@ -128,6 +139,17 @@ const STRINGS = {
       `\ud83c\udfc6 Я прошёл Выжить в космосе! Уровень ${level}, ${kills} убийств за ${time}! Сможешь выжить? \ud83d\ude80`,
     shareDeath: (level: number, kills: number, time: string) =>
       `\ud83d\udc80 Я продержался ${time} в Выжить в космосе! Уровень ${level}, ${kills} убийств. Побьёшь рекорд? \ud83d\ude80`,
+    // Bonus pickup labels
+    bonusHeal:        'ОЗ',
+    bonusMagnet:      'МАГ',
+    bonusBomb:        'УРОН',
+    bonusSpeed:       'СКОР',
+    // Bonus pickup floating text
+    bonusRegenText:   'РЕГЕН!',
+    bonusMagnetText:  'МАГНИТ!',
+    bonusBombText:    'БУМ!',
+    bonusSpeedText:   'СКОРОСТЬ!',
+    bonusBuffText:    'БАФФ!',
     weapons: {
       magic_orb: { name: 'Магическая сфера',   description: 'Стреляет сферами в направлении движения' },
       holy_aura: { name: 'Святая аура',         description: 'Наносит урон ближайшим врагам' },
