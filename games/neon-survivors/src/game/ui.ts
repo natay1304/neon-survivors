@@ -42,7 +42,7 @@ const CSS = `
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   pointer-events: auto;
 }
 #ui-menu-title {
@@ -93,7 +93,7 @@ const CSS = `
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 .ui-mode-row { display: flex; gap: clamp(8px, 1.7vw, 12px); }
 .ui-mode-btn {
@@ -334,21 +334,21 @@ const CSS = `
   margin: 0 0 12px;
 }
 #ui-resume {
-  width: 180px; height: 38px; margin-top: 16px;
+  width: 180px; height: 38px; margin-top: 8px;
   font-family: monospace; font-size: clamp(14px,2.1vw,15px); font-weight: bold;
   cursor: pointer; pointer-events: auto;
   background: #0a1a1a; border: 1px solid #00ffff; color: #00ffff;
 }
 #ui-resume:hover { background: #1a2a2a; border-width: 2px; }
 #ui-restart-pause {
-  width: 180px; height: 38px; margin-top: 12px;
+  width: 180px; height: 38px; margin-top: 8px;
   font-family: monospace; font-size: clamp(14px,2.1vw,15px); font-weight: bold;
   cursor: pointer; pointer-events: auto;
   background: #1a1010; border: 1px solid #ff4444; color: #ff4444;
 }
 #ui-restart-pause:hover { background: #2a1a1a; border-width: 2px; }
 #ui-main-menu-pause {
-  width: 180px; height: 38px; margin-top: 12px;
+  width: 180px; height: 38px; margin-top: 8px;
   font-family: monospace; font-size: clamp(14px,2.1vw,15px); font-weight: bold;
   cursor: pointer; pointer-events: auto;
   background: #111111; border: 1px solid #666688; color: #888899;
@@ -500,6 +500,7 @@ export class UIManager {
   private elLangEn!: HTMLButtonElement;
   private elLangRu!: HTMLButtonElement;
   private elSubtitle!: HTMLParagraphElement;
+  private title!: HTMLHeadingElement;
   private elPlayBtn!: HTMLButtonElement;
   private elHintMobile!: HTMLParagraphElement;
   private elHintDesktop!: HTMLParagraphElement;
@@ -508,12 +509,15 @@ export class UIManager {
   private elModeDesc!: HTMLParagraphElement;
   private elNgBadge!: HTMLSpanElement;
   private elCards!: HTMLDivElement;
+  private elLevelUpTitle!: HTMLHeadingElement;
+  private elLevelUpSub!: HTMLParagraphElement;
   private elGoTitle!: HTMLHeadingElement;
   private elGoStats!: HTMLParagraphElement;
   private elReviveBtn!: HTMLButtonElement;
   private elPlayAgain!: HTMLButtonElement;
   private elShare!: HTMLButtonElement;
   private elMainMenuGo!: HTMLButtonElement;
+  private pausedTitle!: HTMLHeadingElement;
   private elPausedHint!: HTMLParagraphElement;
   private elPausedAimHint!: HTMLParagraphElement;
   private elResumeBtn!: HTMLButtonElement;
@@ -742,8 +746,8 @@ export class UIManager {
 
     const menuCenter = this.el<HTMLDivElement>('div', undefined, 'ui-menu-center');
 
-    const title = this.el<HTMLHeadingElement>('h1', 'ui-menu-title');
-    title.textContent = t().textContent;
+    this.title = this.el<HTMLHeadingElement>('h1', 'ui-menu-title');
+    this.title.textContent = strings.textContent;
 
     this.elSubtitle = this.el<HTMLParagraphElement>('p', 'ui-menu-subtitle');
     this.elSubtitle.textContent = strings.subtitle;
@@ -788,18 +792,18 @@ export class UIManager {
     this.elModeDesc.textContent = strings.modeClassicDesc;
 
     modeWrap.append(modeRow, this.elNgBadge, this.elModeDesc);
-    menuCenter.append(title, this.elSubtitle, this.elPlayBtn, this.elHintMobile, this.elHintDesktop, modeWrap);
+    menuCenter.append(this.title, this.elSubtitle, this.elPlayBtn, this.elHintMobile, this.elHintDesktop, modeWrap);
     this.elMenu.appendChild(menuCenter);
 
     // ── LEVEL UP ──────────────────────────────────────────────────
     this.elLevelup = this.el<HTMLDivElement>('div', 'ui-levelup', 'ui-screen');
 
     const lvHeader = this.el<HTMLDivElement>('div', 'ui-levelup-header');
-    const lvTitle = this.el<HTMLHeadingElement>('h2');
-    lvTitle.textContent = strings.levelUp;
-    const lvSub = this.el<HTMLParagraphElement>('p');
-    lvSub.textContent = strings.chooseUpgrade;
-    lvHeader.append(lvTitle, lvSub);
+    this.elLevelUpTitle = this.el<HTMLHeadingElement>('h2');
+    this.elLevelUpTitle.textContent = strings.levelUp;
+    this.elLevelUpSub = this.el<HTMLParagraphElement>('p');
+    this.elLevelUpSub.textContent = strings.chooseUpgrade;
+    lvHeader.append(this.elLevelUpTitle, this.elLevelUpSub);
 
     this.elCards = this.el<HTMLDivElement>('div', 'ui-levelup-cards');
     this.elLevelup.append(lvHeader, this.elCards);
@@ -849,8 +853,8 @@ export class UIManager {
     this.elPaused = this.el<HTMLDivElement>('div', 'ui-paused', 'ui-screen');
     const pausedInner = this.el<HTMLDivElement>('div', undefined, 'ui-paused-inner');
 
-    const pausedTitle = this.el<HTMLHeadingElement>('h2', 'ui-paused-title');
-    pausedTitle.textContent = strings.paused;
+    this.pausedTitle = this.el<HTMLHeadingElement>('h2', 'ui-paused-title');
+    this.pausedTitle.textContent = strings.paused;
 
     this.elPausedHint = this.el<HTMLParagraphElement>('p', undefined, 'ui-paused-hint');
     this.elPausedHint.textContent = strings.escResume;
@@ -879,7 +883,7 @@ export class UIManager {
       if (this.onMainMenu) this.onMainMenu();
     });
 
-    pausedInner.append(pausedTitle, this.elPausedHint, this.elPausedAimHint, this.elResumeBtn, this.elRestartPause, this.elMainMenuPause);
+    pausedInner.append(this.pausedTitle, this.elPausedHint, this.elPausedAimHint, this.elResumeBtn, this.elRestartPause, this.elMainMenuPause);
     this.elPaused.appendChild(pausedInner);
 
     // ── TOP-RIGHT CONTROLS (sound + lang) ─────────────────────────
@@ -993,9 +997,14 @@ export class UIManager {
     this.onShare(text);
   }
 
+  private isMobile(): boolean {
+    return /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      || (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
+  }
+
   private updateVisibility(): void {
     const s = this._screen;
-    const mobile = window.innerWidth < 600;
+    const mobile = this.isMobile();
 
     this.elMenu.classList.toggle('vis', s === 'menu');
     this.elLevelup.classList.toggle('vis', s === 'levelup');
@@ -1010,6 +1019,8 @@ export class UIManager {
     if (s === 'menu') {
       this.elHintMobile.style.display = mobile ? '' : 'none';
       this.elHintDesktop.style.display = mobile ? 'none' : '';
+      this.elNgBadge.style.display = mobile ? 'none' : '';
+      this.elModeDesc.style.display = mobile ? 'none' : '';
       this.refreshModeSelector();
     }
 
@@ -1048,8 +1059,9 @@ export class UIManager {
   private refreshAllText(): void {
     const strings = t();
     const locale = getLocale();
-    const mobile = window.innerWidth < 600;
+    const mobile = this.isMobile();
 
+    this.title.textContent = strings.textContent;
     this.elSubtitle.textContent = strings.subtitle;
     this.elPlayBtn.textContent = strings.play;
     this.elHintMobile.innerHTML = `${strings.moveLeft}<br>${strings.aimLeft}`;
@@ -1063,10 +1075,14 @@ export class UIManager {
     this.elPausedAimHint.textContent = strings.aimHintPause;
     this.elResumeBtn.textContent = strings.resume;
     this.elRestartPause.textContent = strings.restart;
+    this.pausedTitle.textContent = strings.paused;
     this.elMainMenuPause.textContent = strings.mainMenu;
+    this.elReviveBtn.textContent = strings.watchAdRevive;
     this.elPlayAgain.textContent = strings.playAgain;
     this.elShare.textContent = strings.shareScore;
     this.elMainMenuGo.textContent = strings.mainMenu;
+    this.elLevelUpTitle.textContent = strings.levelUp;
+    this.elLevelUpSub.textContent = strings.chooseUpgrade;
   }
 
   // ── HUD helpers ───────────────────────────────────────────────────
