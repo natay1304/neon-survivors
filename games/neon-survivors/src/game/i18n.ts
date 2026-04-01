@@ -4,6 +4,7 @@ export type Locale = 'en' | 'ru';
 
 const STRINGS = {
   en: {
+    textContent:       'NEON SURVIVORS',
     // Menu
     subtitle:          'Survive the swarm. Grow stronger.',
     tapToStart:        'TAP or PRESS ANY KEY',
@@ -77,6 +78,7 @@ const STRINGS = {
     } as Record<string, string>,
   },
   ru: {
+    textContent:       'ВЫЖИТЬ В КОСМОСЕ',
     subtitle:          'Выживи среди орды. Стань сильнее.',
     tapToStart:        'НАЖМИТЕ ЛЮБУЮ КЛАВИШУ',
     play:              'ИГРАТЬ',
@@ -117,15 +119,15 @@ const STRINGS = {
     resume:            'ПРОДОЛЖИТЬ',
     restart:           'ЗАНОВО',
     mainMenu:          'ГЛАВНОЕ МЕНЮ',
-    hpLabel:           'HP',
+    hpLabel:           'ОЗ',
     enemiesLabel:      'враги:',
     killsLabel:        'убийств:',
     lvLabel:           'УР',
     aimHintHud:        'МЫШЬ = прицел  |  ESC = пауза',
     shareVictory: (level: number, kills: number, time: string) =>
-      `\ud83c\udfc6 Я прошёл Neon Survivors! Уровень ${level}, ${kills} убийств за ${time}! Сможешь выжить? \ud83d\ude80`,
+      `\ud83c\udfc6 Я прошёл Выжить в космосе! Уровень ${level}, ${kills} убийств за ${time}! Сможешь выжить? \ud83d\ude80`,
     shareDeath: (level: number, kills: number, time: string) =>
-      `\ud83d\udc80 Я продержался ${time} в Neon Survivors! Уровень ${level}, ${kills} убийств. Побьёшь рекорд? \ud83d\ude80`,
+      `\ud83d\udc80 Я продержался ${time} в Выжить в космосе! Уровень ${level}, ${kills} убийств. Побьёшь рекорд? \ud83d\ude80`,
     weapons: {
       magic_orb: { name: 'Магическая сфера',   description: 'Стреляет сферами в направлении движения' },
       holy_aura: { name: 'Святая аура',         description: 'Наносит урон ближайшим врагам' },
@@ -136,7 +138,7 @@ const STRINGS = {
     stats: {
       damage:      '+10% к урону',
       speed:       '+8% к скорости',
-      maxHp:       '+20 к макс. HP',
+      maxHp:       '+20 к макс. ОЗ',
       pickupRange: '+25% к радиусу подбора',
       armor:       '+1 к броне',
       cooldown:    '-8% к перезарядке',

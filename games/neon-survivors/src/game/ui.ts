@@ -743,7 +743,7 @@ export class UIManager {
     const menuCenter = this.el<HTMLDivElement>('div', undefined, 'ui-menu-center');
 
     const title = this.el<HTMLHeadingElement>('h1', 'ui-menu-title');
-    title.textContent = 'NEON SURVIVORS';
+    title.textContent = t().textContent;
 
     this.elSubtitle = this.el<HTMLParagraphElement>('p', 'ui-menu-subtitle');
     this.elSubtitle.textContent = strings.subtitle;
