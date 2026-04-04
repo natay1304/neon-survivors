@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "neon-survivors",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--workspace=games/neon-survivors"],
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "export PATH=/Users/romaoganesan/.nvm/versions/node/v20.10.0/bin:$PATH && npm run dev --workspace=games/neon-survivors"],
       "port": 5173
     },
     {

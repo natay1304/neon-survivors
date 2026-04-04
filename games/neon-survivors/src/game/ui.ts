@@ -274,8 +274,18 @@ const CSS = `
   margin: 0 0 6px;
   pointer-events: none;
 }
+.ui-go-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  max-width: 360px;
+}
+.ui-go-btns > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
 #ui-revive {
-  width: 260px; height: 44px;
+  width: 100%; max-width: 360px; height: 36px;
   font-family: monospace; font-size: 16px; font-weight: bold;
   cursor: pointer; pointer-events: auto;
   background: #2a1a0a; border: 1px solid #ffaa33; color: #ffaa33;
@@ -283,21 +293,21 @@ const CSS = `
 }
 #ui-revive:hover { background: #3a2a1a; border-width: 2px; }
 #ui-play-again {
-  width: 200px; height: 44px;
-  font-family: monospace; font-size: 18px; font-weight: bold;
+  height: 36px;
+  font-family: monospace; font-size: 16px; font-weight: bold;
   cursor: pointer; pointer-events: auto;
   background: #1a1a3a; border: 1px solid #00ffff; color: #00ffff;
 }
 #ui-play-again:hover { background: #2a2a5a; border-width: 2px; }
 #ui-share {
-  width: 200px; height: 38px;
-  font-family: monospace; font-size: 15px; font-weight: bold;
+  height: 36px;
+  font-family: monospace; font-size: 14px; font-weight: bold;
   cursor: pointer; pointer-events: auto;
   background: #0a2a0a; border: 1px solid #44ff44; color: #44ff44;
 }
 #ui-share:hover { background: #1a3a1a; border-width: 2px; }
 #ui-main-menu-go {
-  width: 200px; height: 38px;
+  height: 36px;
   font-family: monospace; font-size: 14px; font-weight: bold;
   cursor: pointer; pointer-events: auto;
   background: #1a0a0a; border: 1px solid #777799; color: #777799;
@@ -315,6 +325,7 @@ const CSS = `
   flex-direction: column;
   align-items: center;
   pointer-events: auto;
+  min-width: 170px;
 }
 #ui-paused-title {
   font-size: clamp(32px, 6vw, 42px);
@@ -333,22 +344,30 @@ const CSS = `
   color: #555566;
   margin: 0 0 12px;
 }
+.ui-paused-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  max-width: 280px;
+  margin-top: 8px;
+}
 #ui-resume {
-  width: 180px; height: 38px; margin-top: 8px;
+  height: 44px;
   font-family: monospace; font-size: clamp(14px,2.1vw,15px); font-weight: bold;
   cursor: pointer; pointer-events: auto;
   background: #0a1a1a; border: 1px solid #00ffff; color: #00ffff;
 }
 #ui-resume:hover { background: #1a2a2a; border-width: 2px; }
 #ui-restart-pause {
-  width: 180px; height: 38px; margin-top: 8px;
+  height: 44px;
   font-family: monospace; font-size: clamp(14px,2.1vw,15px); font-weight: bold;
   cursor: pointer; pointer-events: auto;
   background: #1a1010; border: 1px solid #ff4444; color: #ff4444;
 }
 #ui-restart-pause:hover { background: #2a1a1a; border-width: 2px; }
 #ui-main-menu-pause {
-  width: 180px; height: 38px; margin-top: 8px;
+  width: 100%; max-width: 280px; height: 38px; margin-top: 8px;
   font-family: monospace; font-size: clamp(14px,2.1vw,15px); font-weight: bold;
   cursor: pointer; pointer-events: auto;
   background: #111111; border: 1px solid #666688; color: #888899;
@@ -427,9 +446,9 @@ const CSS = `
   background: linear-gradient(to right, #cc6600, #ffaa33);
 }
 #hud-level {
-  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-  font: bold 16px monospace; color: #ffaa33; pointer-events: none;
-  white-space: nowrap;
+  position: fixed; top: 44px; left: 188px;
+  font: bold 13px monospace; color: #ffaa33; pointer-events: none;
+  white-space: nowrap; line-height: 14px;
 }
 #hud-weapons {
   position: fixed; bottom: 50px; right: 20px;
@@ -633,9 +652,7 @@ export class UIManager {
     const timeStr = `${mm}:${ss}`;
     this.elGoStats.innerHTML =
       `${strings.timeSurvived} ${timeStr}<br>` +
-      `${strings.levelReached} ${player.level}<br>` +
-      `${strings.enemiesKilled} ${player.kills}<br>` +
-      `${strings.damageDealt} ${Math.round(player.damageDealt)}`;
+      `${strings.levelReached} ${player.level}&nbsp;|&nbsp;${strings.enemiesKilled} ${player.kills}`;
 
     this.elReviveBtn.style.display = (!victory && this.canRevive) ? '' : 'none';
     this.shareData = { kills: player.kills, time: timeStr, level: player.level, victory };
@@ -846,7 +863,9 @@ export class UIManager {
       if (this.onMainMenu) this.onMainMenu();
     });
 
-    goInner.append(this.elGoTitle, this.elGoStats, this.elReviveBtn, this.elPlayAgain, this.elShare, this.elMainMenuGo);
+    const goBtns = this.el<HTMLDivElement>('div', undefined, 'ui-go-btns');
+    goBtns.append(this.elPlayAgain, this.elShare, this.elMainMenuGo);
+    goInner.append(this.elGoTitle, this.elGoStats, this.elReviveBtn, goBtns);
     this.elGameover.appendChild(goInner);
 
     // ── PAUSED ────────────────────────────────────────────────────
@@ -883,7 +902,9 @@ export class UIManager {
       if (this.onMainMenu) this.onMainMenu();
     });
 
-    pausedInner.append(this.pausedTitle, this.elPausedHint, this.elPausedAimHint, this.elResumeBtn, this.elRestartPause, this.elMainMenuPause);
+    const pausedRow = this.el<HTMLDivElement>('div', undefined, 'ui-paused-row');
+    pausedRow.append(this.elResumeBtn, this.elRestartPause);
+    pausedInner.append(this.pausedTitle, this.elPausedHint, this.elPausedAimHint, pausedRow, this.elMainMenuPause);
     this.elPaused.appendChild(pausedInner);
 
     // ── TOP-RIGHT CONTROLS (sound + lang) ─────────────────────────
