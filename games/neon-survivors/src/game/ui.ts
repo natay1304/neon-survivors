@@ -258,7 +258,7 @@ const CSS = `
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   pointer-events: auto;
 }
 #ui-go-title {

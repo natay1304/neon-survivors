@@ -442,6 +442,7 @@ export class NeonSurvivorsScene implements Scene {
         hp.invuln = 2;
         this.screen = 'playing';
         this.ads.gameplayStart();
+        this.audio.startMusic('cosmic_drift');
         this.particles.emit(
           this.world.get<Pos>(this.playerId, C.Pos).x,
           this.world.get<Pos>(this.playerId, C.Pos).y,
